@@ -33,15 +33,72 @@ It is **not** a replacement for a team collaboration tool. It is a personal prod
 
 ---
 
-## Installation
+
+## Installation (macOS & Linux – user-wide)
+
+The recommended way to install `todoctl` is via pipx.
+This works on both macOS and Linux and installs the tool user-wide.
+
+---
+
+### 1. Install pipx
+
+macOS:
+
+brew install pipx
+pipx ensurepath
+
+Ubuntu / Debian:
+
+sudo apt update
+sudo apt install pipx
+pipx ensurepath
+
+Reload your shell:
+
+exec $SHELL
+
+---
+
+### 2. Install todoctl
+
+From PyPI (recommended):
+
+pipx install todoctl
+
+Or directly from GitHub:
+
+pipx install git+https://github.com/epik0r/todoctl.git
+
+---
+
+### 3. Verify installation
+
+todo --help
+
+---
+
+### Notes
+
+- The `todo` command is installed into:
+
+  ~/.local/bin
+
+- If the command is not found:
+
+  pipx ensurepath
+  exec $SHELL
+
+- pipx uses isolated environments internally, but for you the tool behaves like a normal global CLI.
+---
+
+### Installation dev
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -e .
 ```
-
----
 
 ## First Run Behavior
 

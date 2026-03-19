@@ -8,12 +8,20 @@ version = "1.0.0"
 description = "Encrypted monthly CLI todo manager with shell-session passphrase cache"
 readme = "README.md"
 requires-python = ">=3.11"
+license = "GPL-3.0-or-later"
+authors = [
+  { name = "Björn Becker" }
+]
 dependencies = [
   "typer>=0.12",
   "rich>=13.7",
   "cryptography>=42.0.0",
   "keyring>=25.0.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/epik0r/todoctl"
+Repository = "https://github.com/epik0r/todoctl"
 
 [project.scripts]
 todo = "todoctl.cli:main"
