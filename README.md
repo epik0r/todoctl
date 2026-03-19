@@ -161,4 +161,4 @@ cat ~/.local/share/todoctl/bootstrap.log
 
 ## License
 
-MIT
+GPLv3
