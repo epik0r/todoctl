@@ -1,5 +1,16 @@
+"""
+Bootstrap and integration helpers for todoctl.
+
+This module installs and removes user-environment integrations such as
+shell session initialization, shell completion, and optional vim support.
+It also maintains bootstrap state and writes debug information for
+troubleshooting integration issues.
+"""
 from __future__ import annotations
-import json, os, shutil, traceback
+import json
+import os
+import shutil
+import traceback
 from pathlib import Path
 from .config import AppConfig
 
@@ -14,12 +25,34 @@ VIM_FTDETECT = "todoctl.vim"
 VIM_SYNTAX = "todoctl.vim"
 VIM_FTPLUGIN = "todoctl.vim"
 
+
 def _log(config: AppConfig, message: str) -> None:
+    """
+    Append a log message to the bootstrap log file.
+
+    Ensures that the parent directory exists before writing.
+    Each message is written on a new line with trailing newlines stripped.
+
+    Args:
+        config (AppConfig): Application configuration containing the log file path.
+        message (str): The message to write to the log.
+    """
     config.bootstrap_log_file.parent.mkdir(parents=True, exist_ok=True)
     with config.bootstrap_log_file.open("a", encoding="utf-8") as handle:
         handle.write(message.rstrip("\n") + "\n")
 
 def _load_state(path: Path) -> dict:
+    """
+    Load the bootstrap state from a JSON file.
+
+    If the file does not exist or cannot be parsed, an empty dictionary is returned.
+
+    Args:
+        path (Path): Path to the state file.
+
+    Returns:
+        dict: The loaded state data, or an empty dictionary on failure.
+    """
     if not path.exists():
         return {}
     try:
@@ -28,10 +61,29 @@ def _load_state(path: Path) -> dict:
         return {}
 
 def _save_state(path: Path, state: dict) -> None:
+    """
+    Save the bootstrap state to a JSON file.
+
+    Ensures that the parent directory exists before writing.
+
+    Args:
+        path (Path): Path to the state file.
+        state (dict): State data to persist.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(state, indent=2, sort_keys=True), encoding="utf-8")
 
 def detect_shell_name() -> str:
+    """
+    Detect the current user's shell name.
+
+    Attempts to determine the shell from the parent process. If that fails,
+    falls back to the SHELL environment variable. Defaults to "bash" if
+    detection is unsuccessful.
+
+    Returns:
+        str: The detected shell name ("bash" or "zsh").
+    """
     try:
         import subprocess
         parent = subprocess.check_output(
@@ -51,15 +103,47 @@ def detect_shell_name() -> str:
 
     return "bash"
 
+
 def shell_rc_file(shell_name: str) -> Path:
+    """
+    Get the shell configuration (rc) file path for a given shell.
+
+    Args:
+        shell_name (str): The shell name ("bash" or "zsh").
+
+    Returns:
+        Path: Path to the corresponding rc file.
+    """
     return Path.home() / (".zshrc" if shell_name == "zsh" else ".bashrc")
 
+
 def completion_file(shell_name: str) -> Path:
+    """
+    Get the completion script file path for a given shell.
+
+    Args:
+        shell_name (str): The shell name ("bash" or "zsh").
+
+    Returns:
+        Path: Path to the shell completion file.
+    """
     if shell_name == "zsh":
         return Path.home() / ".zsh" / "completions" / "_todo"
     return Path.home() / ".bash_completions" / "todo.sh"
 
 def _replace_or_append_block(path: Path, start_marker: str, end_marker: str, block: str) -> None:
+    """
+    Replace or append a marked block of text in a file.
+
+    If the markers already exist, the block between them is replaced.
+    Otherwise, the block is appended to the file.
+
+    Args:
+        path (Path): Target file path.
+        start_marker (str): Marker indicating the start of the block.
+        end_marker (str): Marker indicating the end of the block.
+        block (str): The content block to insert.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
     existing = path.read_text(encoding="utf-8") if path.exists() else ""
     if start_marker in existing and end_marker in existing:
@@ -80,6 +164,16 @@ def _replace_or_append_block(path: Path, start_marker: str, end_marker: str, blo
     path.write_text(content, encoding="utf-8")
 
 def _remove_block(path: Path, start_marker: str, end_marker: str) -> None:
+    """
+    Remove a marked block of text from a file.
+
+    If the markers are not present, the file remains unchanged.
+
+    Args:
+        path (Path): Target file path.
+        start_marker (str): Marker indicating the start of the block.
+        end_marker (str): Marker indicating the end of the block.
+    """
     if not path.exists():
         return
     content = path.read_text(encoding="utf-8")
@@ -97,6 +191,15 @@ def _remove_block(path: Path, start_marker: str, end_marker: str) -> None:
     path.write_text(new_content, encoding="utf-8")
 
 def shell_integration_block() -> str:
+    """
+    Generate the shell integration block.
+
+    This block initializes a session-specific environment variable
+    for todoctl if not already set.
+
+    Returns:
+        str: Shell script block for integration.
+    """
     return "\n".join([
         SHELL_MARKER_START,
         'if [ -z "$TODOCTL_SESSION_ID" ]; then',
@@ -106,6 +209,12 @@ def shell_integration_block() -> str:
     ])
 
 def bash_completion_source_block() -> str:
+    """
+    Generate the bash completion source block.
+
+    Returns:
+        str: Shell script block to source the bash completion file.
+    """
     return "\n".join([
         BASH_COMPLETION_SOURCE_MARKER,
         'if [ -f "$HOME/.bash_completions/todo.sh" ]; then',
@@ -115,6 +224,12 @@ def bash_completion_source_block() -> str:
     ])
 
 def zsh_completion_source_block() -> str:
+    """
+    Generate the zsh completion initialization block.
+
+    Returns:
+        str: Shell script block to configure zsh completions.
+    """
     return "\n".join([
         ZSH_COMPLETION_MARKER,
         'mkdir -p "$HOME/.zsh/completions"',
@@ -125,6 +240,12 @@ def zsh_completion_source_block() -> str:
     ])
 
 def bash_completion_content() -> str:
+    """
+    Generate the bash completion script content for todoctl.
+
+    Returns:
+        str: Bash completion function and registration.
+    """
     return "\n".join([
         "_todo_completion() {",
         "    local IFS=$'\\n'",
@@ -148,6 +269,12 @@ def bash_completion_content() -> str:
     ])
 
 def zsh_completion_content() -> str:
+    """
+    Generate the zsh completion script content for todoctl.
+
+    Returns:
+        str: Zsh-compatible completion function and registration.
+    """
     return "\n".join([
         "autoload -U +X bashcompinit && bashcompinit",
         "_todo_completion() {",
@@ -170,6 +297,12 @@ def zsh_completion_content() -> str:
     ])
 
 def vim_paths() -> dict[str, Path]:
+    """
+    Get the file paths for vim integration components.
+
+    Returns:
+        dict[str, Path]: Paths for ftdetect, syntax, and ftplugin files.
+    """
     root = Path.home() / ".vim"
     return {
         "ftdetect": root / "ftdetect" / VIM_FTDETECT,
@@ -178,9 +311,21 @@ def vim_paths() -> dict[str, Path]:
     }
 
 def vim_ftdetect_content() -> str:
+    """
+    Generate vim filetype detection configuration.
+
+    Returns:
+        str: Vim autocommand configuration for detecting .todo files.
+    """
     return 'augroup todoctl_filetype\n    autocmd!\n    autocmd BufRead,BufNewFile *.todo set filetype=todoctl\naugroup END\n'
 
 def vim_syntax_content() -> str:
+    """
+    Generate vim syntax highlighting configuration for todoctl files.
+
+    Returns:
+        str: Vim syntax definitions.
+    """
     return "\n".join([
         'if exists("b:current_syntax")',
         "  finish",
@@ -198,9 +343,31 @@ def vim_syntax_content() -> str:
     ])
 
 def vim_ftplugin_content() -> str:
+    """
+    Generate vim filetype plugin configuration.
+
+    Returns:
+        str: Vim settings applied to todoctl files.
+    """
     return "\n".join(["setlocal nowrap", "setlocal nospell", "setlocal commentstring=#\\ %s", ""])
 
 def install_for_shell(config: AppConfig) -> dict:
+    """
+    Install shell and editor integrations for todoctl.
+
+    Configures shell rc files with environment initialization and completion setup,
+    installs completion scripts, and optionally installs vim integration files
+    if vim or vi is available.
+
+    The installation state is persisted for later removal.
+
+    Args:
+        config (AppConfig): Application configuration.
+
+    Returns:
+        dict: Information about the installed components, including shell type,
+              rc file path, completion file path, and vim installation status.
+    """
     shell_name = detect_shell_name()
     rc_file = shell_rc_file(shell_name)
     comp_file = completion_file(shell_name)
@@ -232,6 +399,19 @@ def install_for_shell(config: AppConfig) -> dict:
     return state
 
 def uninstall_integrations(config: AppConfig) -> dict:
+    """
+    Remove previously installed shell and editor integrations.
+
+    Uses stored bootstrap state if available, otherwise falls back to
+    detected defaults. Removes shell blocks, completion files, and vim
+    integration files.
+
+    Args:
+        config (AppConfig): Application configuration.
+
+    Returns:
+        dict: Information about removed components.
+    """
     state = _load_state(config.bootstrap_state_file)
     shell_name = state.get("shell", detect_shell_name())
     rc_file = Path(state.get("rc_file", str(shell_rc_file(shell_name))))
@@ -258,6 +438,21 @@ def uninstall_integrations(config: AppConfig) -> dict:
     return removed
 
 def auto_bootstrap(config: AppConfig) -> dict:
+    """
+    Automatically perform bootstrap installation with logging.
+
+    Calls the installation routine and logs success or failure.
+    In case of an exception, the error is logged and re-raised.
+
+    Args:
+        config (AppConfig): Application configuration.
+
+    Returns:
+        dict: Installation state returned by the bootstrap process.
+
+    Raises:
+        Exception: Re-raises any exception encountered during installation.
+    """
     try:
         state = install_for_shell(config)
         _log(config, f"bootstrap ok: shell={state['shell']} completion={state['completion_file']}")

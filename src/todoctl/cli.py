@@ -1,3 +1,10 @@
+"""
+Command-line interface for todoctl.
+
+This module defines the public CLI commands, user interaction flow,
+error handling, and startup bootstrap behavior. It is the main entry
+point for daily usage of todoctl.
+"""
 from __future__ import annotations
 import os, shutil, subprocess, sys
 from pathlib import Path
@@ -19,17 +26,48 @@ app = typer.Typer(help="Encrypted monthly todo manager", add_completion=False)
 console = Console()
 
 def _cfg():
+    """
+    Load and return the application configuration.
+
+    Returns:
+        AppConfig: The loaded todoctl application configuration.
+    """
     return load_config()
 
 def handle_error(exc: Exception) -> None:
+    """
+    Display an error message and terminate the CLI command with exit code 1.
+
+    Args:
+        exc (Exception): The exception or error to display.
+
+    Raises:
+        typer.Exit: Always raised with status code 1 after printing the error.
+    """
     console.print(f"[red]{exc}[/red]")
     raise typer.Exit(1)
 
 def _completion_mode() -> bool:
+    """
+    Check whether the CLI is running in shell completion mode.
+
+    Returns:
+        bool: True if a completion-related environment variable is present,
+        otherwise False.
+    """
     return any(key.endswith("_COMPLETE") for key in os.environ)
 
 @app.command()
 def init() -> None:
+    """
+    Initialize todoctl storage and default configuration.
+
+    This command ensures that all required directories exist, writes the
+    default configuration file, and initializes the encrypted data store.
+
+    Raises:
+        typer.Exit: If store initialization fails.
+    """
     cfg = _cfg()
     cfg.ensure_directories()
     write_default_config(cfg)
@@ -42,6 +80,19 @@ def init() -> None:
 
 @app.command()
 def list(month: str | None = typer.Argument(None)) -> None:
+    """
+    List all tasks for a given month.
+
+    If no month is provided, the current month is resolved automatically.
+    The command loads the corresponding month document and prints all tasks
+    in a formatted table.
+
+    Args:
+        month (str | None): Optional month identifier to display.
+
+    Raises:
+        typer.Exit: If the month data cannot be loaded.
+    """
     cfg = _cfg()
     m = resolve_month(month)
     try:
@@ -60,6 +111,18 @@ def list(month: str | None = typer.Argument(None)) -> None:
 
 @app.command()
 def edit(month: str | None = typer.Argument(None)) -> None:
+    """
+    Open the task file for a given month in the configured editor.
+
+    If no month is provided, the current month is resolved automatically.
+    The command ensures a passphrase is available before launching the editor.
+
+    Args:
+        month (str | None): Optional month identifier to edit.
+
+    Raises:
+        typer.Exit: If the editor fails or the month cannot be edited.
+    """
     cfg = _cfg()
     m = resolve_month(month)
     try:
@@ -74,6 +137,18 @@ def edit(month: str | None = typer.Argument(None)) -> None:
 
 @app.command()
 def add(title: str, month: str | None = typer.Option(None, "--month", "-m")) -> None:
+    """
+    Add a new task to a month.
+
+    If no month is provided, the current month is resolved automatically.
+
+    Args:
+        title (str): Title of the new task.
+        month (str | None): Optional month identifier to add the task to.
+
+    Raises:
+        typer.Exit: If the task cannot be added.
+    """
     cfg = _cfg()
     m = resolve_month(month)
     try:
@@ -85,21 +160,62 @@ def add(title: str, month: str | None = typer.Option(None, "--month", "-m")) -> 
 
 @app.command()
 def done(task_id: int, month: str | None = typer.Option(None, "--month", "-m")) -> None:
+    """
+    Mark a task as DONE.
+
+    Args:
+        task_id (int): Identifier of the task to update.
+        month (str | None): Optional month identifier containing the task.
+    """
     _set_status_cmd(task_id, Status.DONE, month)
 
 @app.command()
 def doing(task_id: int, month: str | None = typer.Option(None, "--month", "-m")) -> None:
+    """
+    Mark a task as DOING.
+
+    Args:
+        task_id (int): Identifier of the task to update.
+        month (str | None): Optional month identifier containing the task.
+    """
     _set_status_cmd(task_id, Status.DOING, month)
 
 @app.command(name="open")
 def open_cmd(task_id: int, month: str | None = typer.Option(None, "--month", "-m")) -> None:
+    """
+    Mark a task as OPEN.
+
+    Args:
+        task_id (int): Identifier of the task to update.
+        month (str | None): Optional month identifier containing the task.
+    """
     _set_status_cmd(task_id, Status.OPEN, month)
 
 @app.command()
 def side(task_id: int, month: str | None = typer.Option(None, "--month", "-m")) -> None:
+    """
+    Mark a task as SIDE.
+
+    Args:
+        task_id (int): Identifier of the task to update.
+        month (str | None): Optional month identifier containing the task.
+    """
     _set_status_cmd(task_id, Status.SIDE, month)
 
 def _set_status_cmd(task_id: int, status: Status, month: str | None) -> None:
+    """
+    Update the status of a task for a given month.
+
+    If no month is provided, the current month is resolved automatically.
+
+    Args:
+        task_id (int): Identifier of the task to update.
+        status (Status): New status to assign to the task.
+        month (str | None): Optional month identifier containing the task.
+
+    Raises:
+        typer.Exit: If the task status cannot be updated.
+    """
     cfg = _cfg()
     m = resolve_month(month)
     try:
@@ -111,6 +227,18 @@ def _set_status_cmd(task_id: int, status: Status, month: str | None) -> None:
 
 @app.command()
 def remove(task_id: int, month: str | None = typer.Option(None, "--month", "-m")) -> None:
+    """
+    Remove a task from a month.
+
+    If no month is provided, the current month is resolved automatically.
+
+    Args:
+        task_id (int): Identifier of the task to remove.
+        month (str | None): Optional month identifier containing the task.
+
+    Raises:
+        typer.Exit: If the task cannot be removed.
+    """
     cfg = _cfg()
     m = resolve_month(month)
     try:
@@ -122,6 +250,20 @@ def remove(task_id: int, month: str | None = typer.Option(None, "--month", "-m")
 
 @app.command()
 def rollover(source: str, target: str) -> None:
+    """
+    Copy unfinished tasks from one month into another month.
+
+    Tasks with status DONE are skipped. Tasks already present in the target
+    month with the same title and status are not duplicated. New task IDs are
+    assigned sequentially in the target month.
+
+    Args:
+        source (str): Source month identifier.
+        target (str): Target month identifier.
+
+    Raises:
+        typer.Exit: If the rollover operation fails.
+    """
     cfg = _cfg()
     src = resolve_month(source)
     dst = resolve_month(target)
@@ -146,6 +288,15 @@ def rollover(source: str, target: str) -> None:
 
 @app.command()
 def doctor(verify_password: bool = typer.Option(False, "--verify-password")) -> None:
+    """
+    Run diagnostic checks and display the results.
+
+    The command collects a doctor report and prints each check, status,
+    and detail in a table.
+
+    Args:
+        verify_password (bool): Whether to verify the stored password setup.
+    """
     cfg = _cfg()
     rows = collect_doctor_report(cfg, verify_password=verify_password)
     table = Table()
@@ -159,6 +310,15 @@ def doctor(verify_password: bool = typer.Option(False, "--verify-password")) -> 
 
 @app.command()
 def backup(output: Path | None = typer.Option(None, "--output", "-o")) -> None:
+    """
+    Create a backup archive of local todoctl data.
+
+    Args:
+        output (Path | None): Optional output path for the backup archive.
+
+    Raises:
+        typer.Exit: If backup creation fails.
+    """
     cfg = _cfg()
     try:
         target = create_backup(cfg, output)
@@ -172,6 +332,20 @@ def purge(
     yes: bool = typer.Option(False, "--yes", help="Do not ask for confirmation."),
     uninstall: bool = typer.Option(False, "--uninstall", help="Remove shell/vim integrations and uninstall the Python package."),
 ) -> None:
+    """
+    Remove local todoctl data, configuration, and cached session information.
+
+    By default, the command asks for confirmation before deleting data.
+    Optionally, it can also remove installed shell and vim integrations and
+    uninstall the todoctl Python package.
+
+    Args:
+        yes (bool): Whether to skip the confirmation prompt.
+        uninstall (bool): Whether to remove integrations and uninstall todoctl.
+
+    Raises:
+        typer.Exit: If the user aborts the purge operation.
+    """
     cfg = _cfg()
     if not yes:
         proceed = typer.confirm("Delete local todoctl data, config and caches?")
@@ -194,6 +368,13 @@ def purge(
         subprocess.run([sys.executable, "-m", "pip", "uninstall", "-y", "todoctl"], check=False)
 
 def main() -> None:
+    """
+    Run the todoctl command-line application.
+
+    This function ensures required directories exist, performs automatic
+    bootstrap setup when not running in shell completion mode, and then
+    starts the Typer application.
+    """
     cfg = _cfg()
     cfg.ensure_directories()
     if not _completion_mode():

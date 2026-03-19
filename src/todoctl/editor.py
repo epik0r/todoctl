@@ -1,3 +1,10 @@
+"""
+Editor integration for todoctl.
+
+This module provides the workflow for opening decrypted monthly todo
+content in a text editor, parsing the modified file after editing,
+and saving it back in encrypted form.
+"""
 from __future__ import annotations
 import os, subprocess, tempfile
 from .config import AppConfig
@@ -6,6 +13,21 @@ from .renderer import render_month, sort_tasks
 from .store import load_month, save_month
 
 def edit_month(config: AppConfig, month: str) -> None:
+    """
+    Open, edit, and save a monthly todo document.
+
+    Loads the encrypted monthly document, renders it into a temporary
+    plaintext file, and opens it in the configured text editor. After
+    editing, the content is parsed, normalized, and saved back in
+    encrypted form.
+
+    Args:
+        config (AppConfig): Loaded application configuration.
+        month (str): Target month identifier (e.g. "2026-03").
+
+    Raises:
+        subprocess.CalledProcessError: If the editor exits with an error.
+    """
     doc = load_month(config, month)
     editor = config.editor or os.environ.get("EDITOR", "vim") or "vim"
     with tempfile.NamedTemporaryFile("w+", suffix=".todo", delete=False, encoding="utf-8") as handle:

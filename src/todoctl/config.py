@@ -1,3 +1,10 @@
+"""
+Configuration handling for todoctl.
+
+This module defines default filesystem locations, the main application
+configuration model, and helpers for loading and writing configuration
+files. It centralizes runtime paths and user-configurable settings.
+"""
 from __future__ import annotations
 import os
 from dataclasses import dataclass
@@ -15,10 +22,28 @@ DEFAULT_BOOTSTRAP_STATE = DEFAULT_DATA_DIR / "bootstrap_state.json"
 DEFAULT_BOOTSTRAP_LOG = DEFAULT_DATA_DIR / "bootstrap.log"
 
 def _expand(value: str) -> Path:
+    """
+    Expand and normalize a filesystem path.
+
+    Resolves user home shortcuts (e.g. "~") and returns an absolute path.
+
+    Args:
+        value (str): Path string to expand.
+
+    Returns:
+        Path: Resolved absolute path.
+    """
     return Path(value).expanduser().resolve()
 
 @dataclass(slots=True)
 class AppConfig:
+    """
+    Main application configuration model.
+
+    Holds all configurable paths and runtime settings required by the
+    application, including editor configuration, filesystem locations,
+    and bootstrap/session metadata.
+    """
     editor: str
     data_dir: Path
     months_dir: Path
@@ -33,6 +58,15 @@ class AppConfig:
 
     @classmethod
     def default(cls) -> "AppConfig":
+        """
+        Create a default configuration instance.
+
+        Uses environment variables and predefined constants to initialize
+        a fully populated configuration object.
+
+        Returns:
+            AppConfig: Default configuration instance.
+        """
         return cls(
             editor=os.environ.get("EDITOR", "vim") or "vim",
             data_dir=DEFAULT_DATA_DIR,
@@ -48,12 +82,28 @@ class AppConfig:
         )
 
     def ensure_directories(self) -> None:
+        """
+        Ensure that all required directories exist.
+
+        Creates configuration and data directories if they are missing.
+        This includes paths for configuration, data storage, monthly files,
+        and backups.
+        """
         self.config_path.parent.mkdir(parents=True, exist_ok=True)
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.months_dir.mkdir(parents=True, exist_ok=True)
         self.backups_dir.mkdir(parents=True, exist_ok=True)
 
 def load_config() -> AppConfig:
+    """
+    Load the application configuration from disk.
+
+    If no configuration file exists, a default configuration is returned.
+    Otherwise, values from the TOML file override the defaults.
+
+    Returns:
+        AppConfig: Loaded configuration instance.
+    """
     cfg = AppConfig.default()
     if not cfg.config_path.exists():
         return cfg
@@ -72,6 +122,18 @@ def load_config() -> AppConfig:
     return cfg
 
 def write_default_config(config: AppConfig) -> Path:
+    """
+    Write the current configuration to disk as a TOML file.
+
+    Ensures the configuration directory exists and serializes the
+    configuration fields into a TOML-compatible format.
+
+    Args:
+        config (AppConfig): Configuration instance to write.
+
+    Returns:
+        Path: Path to the written configuration file.
+    """
     config.config_path.parent.mkdir(parents=True, exist_ok=True)
     content = (
         f'editor = "{config.editor}"\n'

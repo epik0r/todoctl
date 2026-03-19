@@ -1,3 +1,10 @@
+"""
+Parsing logic for todoctl month documents.
+
+This module converts editable text representations of monthly todo data
+into structured in-memory models. It supports both the current todoctl
+format and selected legacy shorthand markers for compatibility.
+"""
 from __future__ import annotations
 import re
 from .models import MonthDocument, Status, Task
@@ -6,6 +13,23 @@ HEADER_RE = re.compile(r"^#\s+todoctl month:\s+(\d{4}-\d{2})\s*$")
 STD_RE = re.compile(r"^\[(?P<id>\d+)\]\s+\[(?P<status>OPEN|DOING|SIDE|DONE)\]\s+(?P<title>.+?)\s*$")
 
 def parse_month(text: str, fallback_month: str) -> MonthDocument:
+    """
+    Parse a textual month document into a structured model.
+
+    Processes the given text line by line, extracting the month header
+    and converting task entries into Task objects. Supports both the
+    standard todoctl format and legacy shorthand notations for task
+    states. Automatically assigns incremental IDs for entries without
+    explicit identifiers and removes duplicate IDs by keeping the last
+    occurrence.
+
+    Args:
+        text (str): Raw text content of the month document.
+        fallback_month (str): Default month identifier if no header is found.
+
+    Returns:
+        MonthDocument: Parsed month document with tasks.
+    """
     month = fallback_month
     tasks: list[Task] = []
     next_auto_id = 1
