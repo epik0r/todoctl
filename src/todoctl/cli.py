@@ -6,7 +6,10 @@ error handling, and startup bootstrap behavior. It is the main entry
 point for daily usage of todoctl.
 """
 from __future__ import annotations
-import os, shutil, subprocess, sys
+import os
+import shutil
+import subprocess
+import sys
 from pathlib import Path
 import typer
 from rich.console import Console
@@ -94,13 +97,13 @@ def list(month: str | None = typer.Argument(None)) -> None:
         typer.Exit: If the month data cannot be loaded.
     """
     cfg = _cfg()
-    m = resolve_month(month)
+    resolved_month = resolve_month(month)
     try:
-        doc = load_month(cfg, m)
+        doc = load_month(cfg, resolved_month)
     except Exception as exc:
         handle_error(exc)
         return
-    console.print(f"[bold]todoctl {m}[/bold]")
+    console.print(f"[bold]todoctl {resolved_month}[/bold]")
     table = Table()
     table.add_column("ID", justify="right")
     table.add_column("Status")
@@ -124,16 +127,20 @@ def edit(month: str | None = typer.Argument(None)) -> None:
         typer.Exit: If the editor fails or the month cannot be edited.
     """
     cfg = _cfg()
-    m = resolve_month(month)
+    resolved_month = resolve_month(month)
     try:
-        get_passphrase(confirm=False, ttl_hours=cfg.passphrase_cache_hours, index_file=cfg.session_index_file)
-        edit_month(cfg, m)
+        get_passphrase(
+            confirm=False,
+            ttl_hours=cfg.passphrase_cache_hours,
+            index_file=cfg.session_index_file,
+        )
+        edit_month(cfg, resolved_month)
     except subprocess.CalledProcessError as exc:
         handle_error(RuntimeError(f"Editor exited with status {exc.returncode}"))
     except Exception as exc:
         handle_error(exc)
         return
-    console.print(f"[green]Saved {m}.[/green]")
+    console.print(f"[green]Saved {resolved_month}.[/green]")
 
 @app.command()
 def add(title: str, month: str | None = typer.Option(None, "--month", "-m")) -> None:
@@ -150,13 +157,13 @@ def add(title: str, month: str | None = typer.Option(None, "--month", "-m")) -> 
         typer.Exit: If the task cannot be added.
     """
     cfg = _cfg()
-    m = resolve_month(month)
+    resolved_month = resolve_month(month)
     try:
-        add_task(cfg, m, title)
+        add_task(cfg, resolved_month, title)
     except Exception as exc:
         handle_error(exc)
         return
-    console.print(f"[green]Added task to {m}.[/green]")
+    console.print(f"[green]Added task to {resolved_month}.[/green]")
 
 @app.command()
 def done(task_id: int, month: str | None = typer.Option(None, "--month", "-m")) -> None:
@@ -217,13 +224,13 @@ def _set_status_cmd(task_id: int, status: Status, month: str | None) -> None:
         typer.Exit: If the task status cannot be updated.
     """
     cfg = _cfg()
-    m = resolve_month(month)
+    resolved_month = resolve_month(month)
     try:
-        set_status(cfg, m, task_id, status)
+        set_status(cfg, resolved_month, task_id, status)
     except Exception as exc:
         handle_error(exc)
         return
-    console.print(f"[green]Task {task_id} set to {status.value} in {m}.[/green]")
+    console.print(f"[green]Task {task_id} set to {status.value} in {resolved_month}.[/green]")
 
 @app.command()
 def remove(task_id: int, month: str | None = typer.Option(None, "--month", "-m")) -> None:
@@ -240,13 +247,13 @@ def remove(task_id: int, month: str | None = typer.Option(None, "--month", "-m")
         typer.Exit: If the task cannot be removed.
     """
     cfg = _cfg()
-    m = resolve_month(month)
+    resolved_month = resolve_month(month)
     try:
-        remove_task(cfg, m, task_id)
+        remove_task(cfg, resolved_month, task_id)
     except Exception as exc:
         handle_error(exc)
         return
-    console.print(f"[green]Removed task {task_id} from {m}.[/green]")
+    console.print(f"[green]Removed task {task_id} from {resolved_month}.[/green]")
 
 @app.command()
 def rollover(source: str, target: str) -> None:
@@ -330,7 +337,14 @@ def backup(output: Path | None = typer.Option(None, "--output", "-o")) -> None:
 @app.command()
 def purge(
     yes: bool = typer.Option(False, "--yes", help="Do not ask for confirmation."),
-    uninstall: bool = typer.Option(False, "--uninstall", help="Remove shell/vim integrations and uninstall the Python package."),
+    uninstall: bool = typer.Option(
+        False,
+        "--uninstall",
+        help=(
+            "Remove shell/vim integrations and uninstall "
+            "the Python package."
+        ),
+    ),
 ) -> None:
     """
     Remove local todoctl data, configuration, and cached session information.
@@ -359,9 +373,15 @@ def purge(
         shutil.rmtree(cfg.data_dir, ignore_errors=True)
     if cfg.config_path.parent.exists():
         shutil.rmtree(cfg.config_path.parent, ignore_errors=True)
-    console.print(f"[green]Purged local data. Removed {cleared} shell-session cache entry or entries.[/green]")
+    console.print(
+        "[green]Purged local data. "
+        f"Removed {cleared} shell-session cache entry or entries.[/green]"
+    )
     if uninstall and removed_integrations is not None:
-        console.print(f"[green]Removed shell completion from {removed_integrations['completion_file']}.[/green]")
+        console.print(
+            "[green]Removed shell completion from "
+            f"{removed_integrations['completion_file']}.[/green]"
+        )
         if removed_integrations["vim_removed"]:
             console.print("[green]Removed vim integration.[/green]")
         console.print("[yellow]Restart the shell after uninstall for a clean environment.[/yellow]")
