@@ -45,18 +45,24 @@ This works on both macOS and Linux and installs the tool user-wide.
 
 macOS:
 
+```bash
 brew install pipx
 pipx ensurepath
+```
 
 Ubuntu / Debian:
 
+```bash
 sudo apt update
 sudo apt install pipx
 pipx ensurepath
+```
 
 Reload your shell:
 
+```bash
 exec $SHELL
+```
 
 ---
 
@@ -64,11 +70,15 @@ exec $SHELL
 
 From PyPI (recommended):
 
+```bash
 pipx install todoctl
+```
 
 Or directly from GitHub:
 
+```bash
 pipx install git+https://github.com/epik0r/todoctl.git
+```
 
 ---
 
