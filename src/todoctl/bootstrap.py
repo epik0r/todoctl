@@ -351,7 +351,7 @@ def vim_ftplugin_content() -> str:
     """
     return "\n".join(["setlocal nowrap", "setlocal nospell", "setlocal commentstring=#\\ %s", ""])
 
-def install_for_shell(config: AppConfig) -> dict:
+def install_for_shell(config: AppConfig, update_vim: bool = True) -> dict:
     """
     Install shell and editor integrations for todoctl.
 
@@ -363,6 +363,7 @@ def install_for_shell(config: AppConfig) -> dict:
 
     Args:
         config (AppConfig): Application configuration.
+        update_vim (bool): Whether vim integration files should be written or updated.
 
     Returns:
         dict: Information about the installed components, including shell type,
@@ -387,11 +388,12 @@ def install_for_shell(config: AppConfig) -> dict:
     installed_vim = False
     if vim_installed:
         paths = vim_paths()
-        for p in paths.values():
-            p.parent.mkdir(parents=True, exist_ok=True)
-        paths["ftdetect"].write_text(vim_ftdetect_content(), encoding="utf-8")
-        paths["syntax"].write_text(vim_syntax_content(), encoding="utf-8")
-        paths["ftplugin"].write_text(vim_ftplugin_content(), encoding="utf-8")
+        if update_vim:
+            for p in paths.values():
+                p.parent.mkdir(parents=True, exist_ok=True)
+            paths["ftdetect"].write_text(vim_ftdetect_content(), encoding="utf-8")
+            paths["syntax"].write_text(vim_syntax_content(), encoding="utf-8")
+            paths["ftplugin"].write_text(vim_ftplugin_content(), encoding="utf-8")
         installed_vim = True
 
     state = {"shell": shell_name, "rc_file": str(rc_file), "completion_file": str(comp_file), "vim_installed": installed_vim}
@@ -454,7 +456,7 @@ def auto_bootstrap(config: AppConfig) -> dict:
         Exception: Re-raises any exception encountered during installation.
     """
     try:
-        state = install_for_shell(config)
+        state = install_for_shell(config, update_vim=False)
         _log(config, f"bootstrap ok: shell={state['shell']} completion={state['completion_file']}")
         return state
     except Exception:
