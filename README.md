@@ -200,6 +200,47 @@ todo purge --yes
 todo purge --yes --uninstall
 ```
 
+## todoctl – Vim Integration
+
+### Filetype Detection
+- Automatically detects `.todo` files
+- Sets `filetype=todoctl`
+
+### Syntax Highlighting
+- Highlights:
+  - Header
+  - Task IDs
+  - Comments
+- Status colors:
+  - OPEN (green)
+  - DOING (yellow)
+  - SIDE (blue)
+  - DONE (gray)
+
+### Status Visualization (Conceal)
+- Displays symbols instead of text:
+  - OPEN → ○
+  - DOING → ▶
+  - SIDE → ◆
+  - DONE → ✔
+
+### Status Editing
+- Press `t` to cycle status:
+  OPEN → DOING → SIDE → DONE → OPEN
+
+### Folding by Status
+- Tasks grouped automatically by status
+
+#### Controls
+- `z` → toggle current block
+- `Z` → close all
+- `O` → open all
+
+## Editor Settings
+- `nowrap`
+- `nospell`
+- `commentstring=# %s`
+
 ---
 
 ## Security Model

@@ -11,6 +11,7 @@ import json
 import os
 import shutil
 import traceback
+from importlib.resources import files
 from pathlib import Path
 from .config import AppConfig
 
@@ -307,49 +308,21 @@ def vim_paths() -> dict[str, Path]:
     return {
         "ftdetect": root / "ftdetect" / VIM_FTDETECT,
         "syntax": root / "syntax" / VIM_SYNTAX,
-        "ftplugin": root / "after" / "ftplugin" / VIM_FTPLUGIN,
+        "ftplugin": root / "ftplugin" / VIM_FTPLUGIN,
     }
 
-def vim_ftdetect_content() -> str:
+def _bundled_vim_content(relative_path: str) -> str:
     """
-    Generate vim filetype detection configuration.
+    Load bundled vim integration content from package resources.
+
+    Args:
+        relative_path (str): Relative path below src/todoctl/vim.
 
     Returns:
-        str: Vim autocommand configuration for detecting .todo files.
+        str: File content.
     """
-    return 'augroup todoctl_filetype\n    autocmd!\n    autocmd BufRead,BufNewFile *.todo set filetype=todoctl\naugroup END\n'
+    return files("todoctl").joinpath("vim", *relative_path.split("/")).read_text(encoding="utf-8")
 
-def vim_syntax_content() -> str:
-    """
-    Generate vim syntax highlighting configuration for todoctl files.
-
-    Returns:
-        str: Vim syntax definitions.
-    """
-    return "\n".join([
-        'if exists("b:current_syntax")',
-        "  finish",
-        "endif",
-        r'syntax match todoctlHeader "^# todoctl month: .*$"',
-        r'syntax match todoctlId "^\[[0-9]\+\]"',
-        r'syntax match todoctlStatus "\[OPEN\]\|\[DOING\]\|\[SIDE\]\|\[DONE\]"',
-        r'syntax match todoctlComment "^#.*$"',
-        "highlight default link todoctlHeader Title",
-        "highlight default link todoctlId Identifier",
-        "highlight default link todoctlStatus Statement",
-        "highlight default link todoctlComment Comment",
-        'let b:current_syntax = "todoctl"',
-        "",
-    ])
-
-def vim_ftplugin_content() -> str:
-    """
-    Generate vim filetype plugin configuration.
-
-    Returns:
-        str: Vim settings applied to todoctl files.
-    """
-    return "\n".join(["setlocal nowrap", "setlocal nospell", "setlocal commentstring=#\\ %s", ""])
 
 def install_for_shell(config: AppConfig, update_vim: bool = True) -> dict:
     """
@@ -388,12 +361,19 @@ def install_for_shell(config: AppConfig, update_vim: bool = True) -> dict:
     installed_vim = False
     if vim_installed:
         paths = vim_paths()
-        if update_vim:
-            for p in paths.values():
-                p.parent.mkdir(parents=True, exist_ok=True)
-            paths["ftdetect"].write_text(vim_ftdetect_content(), encoding="utf-8")
-            paths["syntax"].write_text(vim_syntax_content(), encoding="utf-8")
-            paths["ftplugin"].write_text(vim_ftplugin_content(), encoding="utf-8")
+        bundled = {
+            "ftdetect": _bundled_vim_content("ftdetect/todoctl.vim"),
+            "syntax": _bundled_vim_content("syntax/todoctl.vim"),
+            "ftplugin": _bundled_vim_content("ftplugin/todoctl.vim"),
+        }
+
+        for p in paths.values():
+            p.parent.mkdir(parents=True, exist_ok=True)
+
+        for key, path in paths.items():
+            if update_vim or not path.exists():
+                path.write_text(bundled[key], encoding="utf-8")
+
         installed_vim = True
 
     state = {"shell": shell_name, "rc_file": str(rc_file), "completion_file": str(comp_file), "vim_installed": installed_vim}
