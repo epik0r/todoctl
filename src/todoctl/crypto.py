@@ -10,6 +10,7 @@ from __future__ import annotations
 import getpass, hmac, os, secrets
 from hashlib import scrypt
 from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
+from .shell_session_cache import clear_current_session, load_passphrase, store_passphrase
 from .shell_session_cache import load_passphrase, store_passphrase
 
 MAGIC = b"TODOCTL11"
@@ -138,6 +139,7 @@ def decrypt_bytes(blob: bytes, *, ttl_hours: int = 8, index_file=None) -> bytes:
     try:
         return cipher.decrypt(nonce, ciphertext, MAGIC + salt)
     except Exception as exc:
+        clear_current_session()
         raise CryptoError("Wrong password or corrupted data") from exc
 
 def encrypt_text(plaintext: str, *, confirm_password: bool = False, ttl_hours: int = 8, index_file=None) -> bytes:
