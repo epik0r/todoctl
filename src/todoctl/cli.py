@@ -134,13 +134,15 @@ def edit(month: str | None = typer.Argument(None)) -> None:
             ttl_hours=cfg.passphrase_cache_hours,
             index_file=cfg.session_index_file,
         )
-        edit_month(cfg, resolved_month)
+        changed = edit_month(cfg, resolved_month)
     except subprocess.CalledProcessError as exc:
         handle_error(RuntimeError(f"Editor exited with status {exc.returncode}"))
     except Exception as exc:
         handle_error(exc)
         return
-    console.print(f"[green]Saved {resolved_month}.[/green]")
+
+    if changed: 
+        console.print(f"[green]Saved {resolved_month}.[/green]")
 
 @app.command()
 def add(title: str, month: str | None = typer.Option(None, "--month", "-m")) -> None:

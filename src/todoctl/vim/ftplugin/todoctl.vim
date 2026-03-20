@@ -63,7 +63,7 @@ setlocal foldlevel=99
 nnoremap <buffer> z za
 
 " Close all folds
-nnoremap <buffer> Z zM
+nnoremap <buffer> gZ zM
 
 " Open all folds
 nnoremap <buffer> O zR

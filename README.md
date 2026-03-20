@@ -233,7 +233,7 @@ todo purge --yes --uninstall
 
 #### Controls
 - `z` → toggle current block
-- `Z` → close all
+- `gZ` → close all
 - `O` → open all
 
 ## Editor Settings
