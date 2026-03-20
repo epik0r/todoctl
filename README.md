@@ -15,6 +15,10 @@ A CLI-first, encrypted monthly todo manager for nerdy engineers and architects.
 
 It is **not** a replacement for a team collaboration tool. It is a personal productivity tool.
 
+## Demo
+
+![todoctl demo](docs/demo.gif)
+
 ---
 
 ## Features
