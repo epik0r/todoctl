@@ -81,8 +81,9 @@ def init() -> None:
         return
     console.print("[green]todoctl initialized.[/green]")
 
-@app.command()
-def list(month: str | None = typer.Argument(None)) -> None:
+@app.command("list")
+@app.command("l")
+def list_cmd(month: str | None = typer.Argument(None)) -> None:
     """
     List all tasks for a given month.
 
@@ -112,8 +113,9 @@ def list(month: str | None = typer.Argument(None)) -> None:
         table.add_row(str(task.id), task.status.value, task.title)
     console.print(table)
 
-@app.command()
-def edit(month: str | None = typer.Argument(None)) -> None:
+@app.command("edit")
+@app.command("e")
+def edit_cmd(month: str | None = typer.Argument(None)) -> None:
     """
     Open the task file for a given month in the configured editor.
 
