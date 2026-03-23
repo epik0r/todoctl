@@ -30,7 +30,7 @@ def month_path(config: AppConfig, month: str) -> Path:
     Returns:
         Path: Path to the encrypted month file.
     """
-    return config.months_dir / f"{month}.todo"
+    return config.months_dir / f"{month}.todo.enc"
 
 
 def list_months(config: AppConfig) -> list[str]:
@@ -38,8 +38,7 @@ def list_months(config: AppConfig) -> list[str]:
     Return all available month identifiers from the configured month directory.
 
     The function scans the month storage directory and extracts valid
-    YYYY-MM identifiers from filenames. Only months whose resolved
-    storage file exists are returned.
+    YYYY-MM identifiers from encrypted month filenames.
 
     Args:
         config (AppConfig): Application configuration.
@@ -57,12 +56,10 @@ def list_months(config: AppConfig) -> list[str]:
         if not path.is_file():
             continue
 
-        candidates = {path.name, path.stem}
-        for candidate in candidates:
-            if MONTH_RE.fullmatch(candidate):
-                month = candidate
-                if month_path(config, month).exists():
-                    months.add(month)
+        if path.name.endswith(".todo.enc"):
+            month = path.name[:-9]
+            if MONTH_RE.fullmatch(month):
+                months.add(month)
 
     return sorted(months, reverse=True)
 
