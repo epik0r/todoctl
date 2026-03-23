@@ -6,25 +6,66 @@ high-level task operations such as loading, saving, adding, updating,
 and removing tasks from monthly documents.
 """
 from __future__ import annotations
+
+import re
 from pathlib import Path
+
 from .config import AppConfig
 from .crypto import create_check_blob, decrypt_text, encrypt_text, verify_check_blob
 from .models import MonthDocument, Status, Task
 from .parser import parse_month
 from .renderer import render_month, sort_tasks
 
+MONTH_RE = re.compile(r"^\d{4}-\d{2}$")
+
+
 def month_path(config: AppConfig, month: str) -> Path:
     """
-    Construct the filesystem path for a month document.
+    Build the filesystem path for a month document.
 
     Args:
         config (AppConfig): Application configuration.
-        month (str): Month identifier.
+        month (str): Month identifier in YYYY-MM format.
 
     Returns:
         Path: Path to the encrypted month file.
     """
-    return config.months_dir / f"{month}{config.file_extension}"
+    return config.months_dir / f"{month}.todo"
+
+
+def list_months(config: AppConfig) -> list[str]:
+    """
+    Return all available month identifiers from the configured month directory.
+
+    The function scans the month storage directory and extracts valid
+    YYYY-MM identifiers from filenames. Only months whose resolved
+    storage file exists are returned.
+
+    Args:
+        config (AppConfig): Application configuration.
+
+    Returns:
+        list[str]: All discovered month identifiers, sorted descending.
+    """
+    months_dir = config.months_dir
+    if not months_dir.exists():
+        return []
+
+    months: set[str] = set()
+
+    for path in months_dir.iterdir():
+        if not path.is_file():
+            continue
+
+        candidates = {path.name, path.stem}
+        for candidate in candidates:
+            if MONTH_RE.fullmatch(candidate):
+                month = candidate
+                if month_path(config, month).exists():
+                    months.add(month)
+
+    return sorted(months, reverse=True)
+
 
 def init_store(config: AppConfig) -> None:
     """
@@ -38,7 +79,14 @@ def init_store(config: AppConfig) -> None:
     """
     config.ensure_directories()
     if not config.check_file.exists():
-        config.check_file.write_bytes(create_check_blob(confirm_password=True, ttl_hours=config.passphrase_cache_hours, index_file=config.session_index_file))
+        config.check_file.write_bytes(
+            create_check_blob(
+                confirm_password=True,
+                ttl_hours=config.passphrase_cache_hours,
+                index_file=config.session_index_file,
+            )
+        )
+
 
 def verify_store_password(config: AppConfig) -> bool:
     """
@@ -52,7 +100,12 @@ def verify_store_password(config: AppConfig) -> bool:
     """
     if not config.check_file.exists():
         return False
-    return verify_check_blob(config.check_file.read_bytes(), ttl_hours=config.passphrase_cache_hours, index_file=config.session_index_file)
+    return verify_check_blob(
+        config.check_file.read_bytes(),
+        ttl_hours=config.passphrase_cache_hours,
+        index_file=config.session_index_file,
+    )
+
 
 def load_month(config: AppConfig, month: str) -> MonthDocument:
     """
@@ -70,9 +123,14 @@ def load_month(config: AppConfig, month: str) -> MonthDocument:
     path = month_path(config, month)
     if not path.exists():
         return MonthDocument(month=month, tasks=[])
-    text = decrypt_text(path.read_bytes(), ttl_hours=config.passphrase_cache_hours, index_file=config.session_index_file)
+    text = decrypt_text(
+        path.read_bytes(),
+        ttl_hours=config.passphrase_cache_hours,
+        index_file=config.session_index_file,
+    )
     doc = parse_month(text, fallback_month=month)
     return sort_tasks(doc)
+
 
 def save_month(config: AppConfig, doc: MonthDocument) -> Path:
     """
@@ -90,10 +148,15 @@ def save_month(config: AppConfig, doc: MonthDocument) -> Path:
     """
     config.ensure_directories()
     sort_tasks(doc)
-    ciphertext = encrypt_text(render_month(doc), ttl_hours=config.passphrase_cache_hours, index_file=config.session_index_file)
+    ciphertext = encrypt_text(
+        render_month(doc),
+        ttl_hours=config.passphrase_cache_hours,
+        index_file=config.session_index_file,
+    )
     path = month_path(config, doc.month)
     path.write_bytes(ciphertext)
     return path
+
 
 def add_task(config: AppConfig, month: str, title: str) -> MonthDocument:
     """
@@ -113,6 +176,7 @@ def add_task(config: AppConfig, month: str, title: str) -> MonthDocument:
     doc.tasks.append(Task(id=doc.next_id(), title=title, status=Status.OPEN))
     save_month(config, doc)
     return doc
+
 
 def set_status(config: AppConfig, month: str, task_id: int, status: Status) -> MonthDocument:
     """
@@ -139,6 +203,7 @@ def set_status(config: AppConfig, month: str, task_id: int, status: Status) -> M
             save_month(config, doc)
             return doc
     raise ValueError(f"Task ID {task_id} not found in {month}")
+
 
 def remove_task(config: AppConfig, month: str, task_id: int) -> MonthDocument:
     """

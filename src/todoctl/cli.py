@@ -23,7 +23,15 @@ from .editor import edit_month
 from .models import Status
 from .resolver import resolve_month
 from .shell_session_cache import clear_all_sessions, clear_current_session
-from .store import add_task, init_store, load_month, remove_task, save_month, set_status
+from .store import (
+    add_task,
+    init_store,
+    list_months,
+    load_month,
+    remove_task,
+    save_month,
+    set_status,
+)
 
 app = typer.Typer(help="Encrypted monthly todo manager", add_completion=False)
 console = Console()
@@ -83,21 +91,71 @@ def init() -> None:
 
 @app.command("list")
 @app.command("l")
-def list_cmd(month: str | None = typer.Argument(None)) -> None:
+def list_cmd(
+    month: str | None = typer.Argument(None),
+    all_months: bool = typer.Option(
+        False,
+        "--all",
+        "-a",
+        help="List tasks from all available months.",
+    ),
+) -> None:
     """
-    List all tasks for a given month.
+    List all tasks for a given month or across all months.
 
     If no month is provided, the current month is resolved automatically.
-    The command loads the corresponding month document and prints all tasks
-    in a formatted table.
+    With --all, all available month documents are loaded and printed in a
+    single formatted table.
 
     Args:
         month (str | None): Optional month identifier to display.
+        all_months (bool): Whether to list tasks from all available months.
 
     Raises:
         typer.Exit: If the month data cannot be loaded.
     """
     cfg = _cfg()
+
+    if all_months and month is not None:
+        handle_error(ValueError("Please use either MONTH or --all, not both."))
+        return
+
+    if all_months:
+        try:
+            months = list_months(cfg)
+        except Exception as exc:
+            handle_error(exc)
+            return
+
+        if not months:
+            console.print("[yellow]No month documents found.[/yellow]")
+            return
+
+        console.print("[bold]todoctl all months[/bold]")
+        table = Table()
+        table.add_column("Month")
+        table.add_column("ID", justify="right")
+        table.add_column("Status")
+        table.add_column("Title")
+
+        has_tasks = False
+        for month_name in months:
+            try:
+                doc = load_month(cfg, month_name)
+            except Exception as exc:
+                handle_error(exc)
+                return
+
+            for task in doc.tasks:
+                has_tasks = True
+                table.add_row(doc.month, str(task.id), task.status.value, task.title)
+
+        if has_tasks:
+            console.print(table)
+        else:
+            console.print("[yellow]No tasks found in available month documents.[/yellow]")
+        return
+
     resolved_month = resolve_month(month)
     try:
         doc = load_month(cfg, resolved_month)
@@ -143,7 +201,7 @@ def edit_cmd(month: str | None = typer.Argument(None)) -> None:
         handle_error(exc)
         return
 
-    if changed: 
+    if changed:
         console.print(f"[green]Saved {resolved_month}.[/green]")
 
 @app.command()
@@ -258,6 +316,7 @@ def remove(task_id: int, month: str | None = typer.Option(None, "--month", "-m")
         handle_error(exc)
         return
     console.print(f"[green]Removed task {task_id} from {resolved_month}.[/green]")
+
 
 @app.command()
 def rollover(source: str, target: str) -> None:
