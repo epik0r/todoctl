@@ -76,6 +76,33 @@ def _completion_mode() -> bool:
     return any(key.endswith("_COMPLETE") for key in os.environ)
 
 
+def _print_shell_reload_hint() -> None:
+    """
+    Print instructions for activating shell integration in the current shell.
+
+    The todoctl shell integration is written to shell startup files, but the
+    current shell process does not automatically reload them. This helper
+    prints the most likely command the user should run next.
+    """
+    shell_name = Path(os.environ.get("SHELL", "")).name.lower()
+
+    console.print()
+    console.print("[yellow]To activate shell integration, open a new terminal or run:[/yellow]")
+
+    if shell_name == "zsh":
+        console.print("[yellow]  source ~/.zshrc[/yellow]")
+        return
+
+    console.print("[yellow]  source ~/.bashrc[/yellow]")
+    console.print()
+    console.print(
+        "[yellow]If this does not work, ensure that ~/.bash_profile loads ~/.bashrc:[/yellow]"
+    )
+    console.print('[yellow]  if [ -f "$HOME/.bashrc" ]; then[/yellow]')
+    console.print('[yellow]      . "$HOME/.bashrc"[/yellow]')
+    console.print("[yellow]  fi[/yellow]")
+
+
 def _is_probably_pipx_install() -> bool:
     """
     Heuristically detect whether todoctl is running from a pipx-managed environment.
@@ -251,6 +278,8 @@ def init() -> None:
 
     if security_state["security_note"]:
         console.print(f"[yellow]{security_state['security_note']}[/yellow]")
+
+    _print_shell_reload_hint()
 
 
 @app.command("ramdisk-create")
