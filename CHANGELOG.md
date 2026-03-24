@@ -7,12 +7,13 @@ Semantic Versioning.
 
 ------------------------------------------------------------------------
 
-## \[Unreleased\]
+## \[1.0.8\] - 2026-03-24
 
 ### Added
 
 -   Support for reading task title from stdin in `todo add`\
     (e.g. `echo "foo" | todo add`)
+-   hide DONE tasks in monthly list unless --done is set
 
 ------------------------------------------------------------------------
 
