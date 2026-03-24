@@ -99,17 +99,24 @@ def list_cmd(
         "-a",
         help="List tasks from all available months.",
     ),
+    show_done: bool = typer.Option(
+        False,
+        "--done",
+        help="Include tasks with status DONE in the monthly list.",
+    ),
 ) -> None:
     """
-    List all tasks for a given month or across all months.
+    List tasks for a given month or across all months.
 
-    If no month is provided, the current month is resolved automatically.
-    With --all, all available month documents are loaded and printed in a
-    single formatted table.
+    By default, monthly listing hides tasks with status DONE.
+    With --done, completed tasks are included as well.
+    With --all, all available month documents are loaded and printed
+    regardless of task status.
 
     Args:
         month (str | None): Optional month identifier to display.
         all_months (bool): Whether to list tasks from all available months.
+        show_done (bool): Whether to include DONE tasks in monthly output.
 
     Raises:
         typer.Exit: If the month data cannot be loaded.
@@ -162,14 +169,22 @@ def list_cmd(
     except Exception as exc:
         handle_error(exc)
         return
+
     console.print(f"[bold]todoctl {resolved_month}[/bold]")
     table = Table()
     table.add_column("ID", justify="right")
     table.add_column("Status")
     table.add_column("Title")
-    for task in doc.tasks:
+
+    visible_tasks = doc.tasks if show_done else [
+        task for task in doc.tasks if task.status != Status.DONE
+    ]
+
+    for task in visible_tasks:
         table.add_row(str(task.id), task.status.value, task.title)
+
     console.print(table)
+
 
 @app.command("edit")
 @app.command("e")
