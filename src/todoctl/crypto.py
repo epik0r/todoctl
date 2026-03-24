@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import getpass
 import hmac
-import os
 import secrets
 from hashlib import scrypt
 
@@ -132,11 +131,15 @@ def _decode_scrypt_params(data: bytes) -> tuple[int, int, int]:
 
 def get_passphrase(*, confirm: bool = False, ttl_hours: int = 8, index_file=None) -> str:
     """
-    Retrieve the passphrase from environment, cache, or user input.
+    Retrieve the passphrase from cache or user input.
 
-    The function checks the environment variable first, then attempts to
-    load a cached passphrase. If none is available, it prompts the user.
-    Optionally confirms the password and stores it in a session cache.
+    The function first attempts to load a cached passphrase. If none is
+    available, it prompts the user. Optionally confirms the password and
+    stores it in a session cache.
+
+    Environment variables are intentionally not accepted as a passphrase
+    source because process environments are visible to child processes and
+    may be inspectable by other processes of the same user.
 
     Args:
         confirm (bool): Whether to require password confirmation.
@@ -149,10 +152,6 @@ def get_passphrase(*, confirm: bool = False, ttl_hours: int = 8, index_file=None
     Raises:
         CryptoError: If input is invalid or required parameters are missing.
     """
-    env_passphrase = os.environ.get("TODOCTL_PASSPHRASE")
-    if env_passphrase:
-        return env_passphrase
-
     cached = load_passphrase()
     if cached:
         return cached

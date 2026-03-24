@@ -106,6 +106,21 @@ def _build_editor_command(editor: str, temp_path: Path, hardened: bool) -> list[
     return [*parts, str(temp_path)]
 
 
+def _build_editor_env() -> dict[str, str]:
+    """
+    Build a sanitized environment for launching the editor subprocess.
+
+    Sensitive passphrase-related variables are removed so the editor
+    does not inherit secret material through the process environment.
+
+    Returns:
+        dict[str, str]: Sanitized subprocess environment.
+    """
+    env = os.environ.copy()
+    env.pop("TODOCTL_PASSPHRASE", None)
+    return env
+
+
 def _create_standard_tempfile(original_rendered: str) -> Path:
     """
     Create a plaintext temporary file using the standard system temp directory.
@@ -210,7 +225,7 @@ def edit_month(config: AppConfig, month: str) -> bool:
 
     try:
         command = _build_editor_command(editor, temp_path, hardened)
-        subprocess.run(command, check=True)
+        subprocess.run(command, check=True, env=_build_editor_env())
 
         with temp_path.open("r", encoding="utf-8") as handle:
             content = handle.read()
