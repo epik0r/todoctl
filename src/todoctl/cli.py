@@ -205,14 +205,21 @@ def edit_cmd(month: str | None = typer.Argument(None)) -> None:
         console.print(f"[green]Saved {resolved_month}.[/green]")
 
 @app.command()
-def add(title: str, month: str | None = typer.Option(None, "--month", "-m")) -> None:
+def add(
+    title: str | None = typer.Argument(
+        None,
+        help="Task title. If omitted, the title is read from stdin.",
+    ),
+    month: str | None = typer.Option(None, "--month", "-m"),
+) -> None:
     """
     Add a new task to a month.
 
     If no month is provided, the current month is resolved automatically.
+    If no title argument is provided, the command reads the title from stdin.
 
     Args:
-        title (str): Title of the new task.
+        title (str | None): Title of the new task or None.
         month (str | None): Optional month identifier to add the task to.
 
     Raises:
@@ -220,12 +227,26 @@ def add(title: str, month: str | None = typer.Option(None, "--month", "-m")) -> 
     """
     cfg = _cfg()
     resolved_month = resolve_month(month)
+
+    if title is None:
+        if sys.stdin.isatty():
+            handle_error(ValueError("Missing task title. Pass TITLE or pipe it via stdin."))
+            return
+        title = sys.stdin.read().strip()
+
+    title = title.strip()
+    if not title:
+        handle_error(ValueError("Task title must not be empty."))
+        return
+
     try:
         add_task(cfg, resolved_month, title)
     except Exception as exc:
         handle_error(exc)
         return
+
     console.print(f"[green]Added task to {resolved_month}.[/green]")
+
 
 @app.command()
 def done(task_id: int, month: str | None = typer.Option(None, "--month", "-m")) -> None:
