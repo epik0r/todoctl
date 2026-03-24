@@ -8,6 +8,7 @@ point for daily usage of todoctl.
 from __future__ import annotations
 
 import os
+import platform
 import shutil
 import subprocess
 import sys
@@ -75,6 +76,83 @@ def _completion_mode() -> bool:
     return any(key.endswith("_COMPLETE") for key in os.environ)
 
 
+def _create_macos_ramdisk(config_path: Path, mount_path: Path) -> None:
+    """
+    Create and mount the default todoctl RAM disk on macOS.
+
+    The RAM disk is created with APFS and the fixed volume name
+    'todoctl-ramdisk', which normally mounts at /Volumes/todoctl-ramdisk.
+
+    Args:
+        config_path (Path): Path to the todoctl config file for user messaging.
+        mount_path (Path): Expected mount path for the RAM disk.
+
+    Raises:
+        RuntimeError: If the command is not executed on macOS, required tools
+            are missing, or RAM disk creation fails.
+    """
+    if platform.system() != "Darwin":
+        raise RuntimeError("The 'todo ramdisk-create' command is only available on macOS.")
+
+    expected_mount_path = Path("/Volumes/todoctl-ramdisk")
+    if mount_path != expected_mount_path:
+        raise RuntimeError(
+            "The 'todo ramdisk-create' command currently supports only "
+            f"{expected_mount_path}. Update your config or set secure_temp_dir "
+            "to that path."
+        )
+
+    if mount_path.is_dir() and os.access(mount_path, os.W_OK | os.X_OK):
+        console.print(f"[green]RAM disk is already available at {mount_path}[/green]")
+        console.print(f"[green]Configuration file: {config_path}[/green]")
+        console.print(
+            "[yellow]If you want it to be recreated automatically when a shell starts, "
+            "add 'todo ramdisk-create' to your ~/.bashrc, ~/.bash_profile, or ~/.zshrc.[/yellow]"
+        )
+        return
+
+    if shutil.which("hdiutil") is None:
+        raise RuntimeError("Required macOS tool not found: hdiutil")
+    if shutil.which("diskutil") is None:
+        raise RuntimeError("Required macOS tool not found: diskutil")
+
+    sectors = 64 * 2048
+
+    attach_result = subprocess.run(
+        ["hdiutil", "attach", "-nomount", f"ram://{sectors}"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    device = ""
+    for line in attach_result.stdout.splitlines():
+        stripped = line.strip()
+        if stripped:
+            device = stripped.split()[0]
+            break
+
+    if not device:
+        raise RuntimeError("Unable to determine RAM disk device from hdiutil output.")
+
+    subprocess.run(
+        ["diskutil", "erasevolume", "APFS", "todoctl-ramdisk", device],
+        check=True,
+    )
+
+    if not (mount_path.is_dir() and os.access(mount_path, os.W_OK | os.X_OK)):
+        raise RuntimeError(
+            f"RAM disk creation completed, but {mount_path} is not available or not writable."
+        )
+
+    console.print(f"[green]Created RAM disk at {mount_path}[/green]")
+    console.print(f"[green]Configuration file: {config_path}[/green]")
+    console.print(
+        "[yellow]If you want it to be recreated automatically when a shell starts, "
+        "add 'todo ramdisk-create' to your ~/.bashrc, ~/.bash_profile, or ~/.zshrc.[/yellow]"
+    )
+
+
 @app.command()
 def init() -> None:
     """
@@ -107,6 +185,44 @@ def init() -> None:
 
     if security_state["security_note"]:
         console.print(f"[yellow]{security_state['security_note']}[/yellow]")
+
+
+@app.command("ramdisk-create")
+def ramdisk_create() -> None:
+    """
+    Create the todoctl RAM disk on macOS and enable hardened mode.
+
+    This command creates the default APFS RAM disk at
+    /Volumes/todoctl-ramdisk. If creation succeeds and the mount path is
+    writable, todoctl updates the config so hardened editing mode is active.
+
+    Raises:
+        typer.Exit: If RAM disk creation fails.
+    """
+    cfg = _cfg()
+    mount_path = cfg.secure_temp_dir or Path("/Volumes/todoctl-ramdisk")
+
+    try:
+        _create_macos_ramdisk(cfg.config_path, mount_path)
+
+        if not (mount_path.is_dir() and os.access(mount_path, os.W_OK | os.X_OK)):
+            raise RuntimeError(
+                f"RAM disk exists, but {mount_path} is not writable."
+            )
+
+        cfg.secure_temp_dir = mount_path
+        cfg.security_mode = "hardened"
+        write_default_config(cfg)
+
+    except subprocess.CalledProcessError as exc:
+        handle_error(RuntimeError(f"RAM disk creation command failed with status {exc.returncode}"))
+    except Exception as exc:
+        handle_error(exc)
+        return
+
+    console.print(f"[green]Updated configuration written to {cfg.config_path}[/green]")
+    console.print(f"[green]Security mode: {cfg.security_mode}[/green]")
+    console.print(f"[green]Secure temp dir: {cfg.secure_temp_dir}[/green]")
 
 
 @app.command("list")
