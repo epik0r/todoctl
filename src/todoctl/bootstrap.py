@@ -7,13 +7,16 @@ It also maintains bootstrap state and writes debug information for
 troubleshooting integration issues.
 """
 from __future__ import annotations
+
 import json
 import os
+import platform
 import shutil
 import traceback
 from importlib.resources import files
 from pathlib import Path
-from .config import AppConfig
+
+from .config import AppConfig, write_default_config
 
 SHELL_MARKER_START = "# >>> todoctl shell integration >>>"
 SHELL_MARKER_END = "# <<< todoctl shell integration <<<"
@@ -42,6 +45,7 @@ def _log(config: AppConfig, message: str) -> None:
     with config.bootstrap_log_file.open("a", encoding="utf-8") as handle:
         handle.write(message.rstrip("\n") + "\n")
 
+
 def _load_state(path: Path) -> dict:
     """
     Load the bootstrap state from a JSON file.
@@ -61,6 +65,7 @@ def _load_state(path: Path) -> dict:
     except Exception:
         return {}
 
+
 def _save_state(path: Path, state: dict) -> None:
     """
     Save the bootstrap state to a JSON file.
@@ -73,6 +78,208 @@ def _save_state(path: Path, state: dict) -> None:
     """
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(state, indent=2, sort_keys=True), encoding="utf-8")
+
+
+def _is_writable_directory(path: Path) -> bool:
+    """
+    Return whether a path exists and is writable as a directory.
+
+    Args:
+        path (Path): Directory path to validate.
+
+    Returns:
+        bool: True if the directory exists and is writable.
+    """
+    try:
+        return path.is_dir() and os.access(path, os.W_OK | os.X_OK)
+    except OSError:
+        return False
+
+
+def _prompt_yes_no(question: str, default: bool = False) -> bool:
+    """
+    Ask the user a yes/no question.
+
+    Args:
+        question (str): Prompt shown to the user.
+        default (bool): Default answer for empty input.
+
+    Returns:
+        bool: True for yes, False for no.
+    """
+    suffix = "[Y/n]" if default else "[y/N]"
+    while True:
+        answer = input(f"{question} {suffix} ").strip().lower()
+        if not answer:
+            return default
+        if answer in {"y", "yes"}:
+            return True
+        if answer in {"n", "no"}:
+            return False
+        print("Please answer yes or no.")
+
+
+def _prompt_text(question: str, default: str | None = None) -> str:
+    """
+    Ask the user for a text value.
+
+    Args:
+        question (str): Prompt shown to the user.
+        default (str | None): Default value for empty input.
+
+    Returns:
+        str: Entered or default value.
+    """
+    if default:
+        answer = input(f"{question} [{default}] ").strip()
+        return answer or default
+    return input(f"{question} ").strip()
+
+
+def _configure_security_mode_interactive(config: AppConfig) -> dict[str, str]:
+    """
+    Interactively configure the security mode.
+
+    This function is intended to be called only from the explicit
+    initialization flow.
+
+    Args:
+        config (AppConfig): Application configuration to modify.
+
+    Returns:
+        dict[str, str]: Summary of the chosen security settings.
+    """
+    print()
+    print("todoctl can use a higher security editing mode.")
+    print("In hardened mode, decrypted editor content is only written to a RAM-backed")
+    print("temporary directory. If no secure RAM-backed directory is configured,")
+    print("hardened mode will refuse to edit files.")
+    print()
+
+    if not _prompt_yes_no("Enable hardened editing mode?", default=False):
+        config.security_mode = "standard"
+        config.secure_temp_dir = None
+        write_default_config(config)
+        return {
+            "security_mode": config.security_mode,
+            "secure_temp_dir": "",
+            "security_note": "Hardened mode disabled by user.",
+        }
+
+    system = platform.system()
+
+    if system == "Linux":
+        shm_path = Path("/dev/shm")
+        if _is_writable_directory(shm_path):
+            print()
+            print("Suggested RAM-backed directory:")
+            print(f"  {shm_path}")
+            print()
+            if _prompt_yes_no(f"Use {shm_path} for hardened editing?", default=True):
+                config.security_mode = "hardened"
+                config.secure_temp_dir = shm_path
+                write_default_config(config)
+                return {
+                    "security_mode": config.security_mode,
+                    "secure_temp_dir": str(shm_path),
+                    "security_note": f"Hardened mode enabled with {shm_path}.",
+                }
+
+        print()
+        print("A writable /dev/shm directory was not selected or is not available.")
+        print("todoctl will remain in standard mode.")
+        config.security_mode = "standard"
+        config.secure_temp_dir = None
+        write_default_config(config)
+        return {
+            "security_mode": config.security_mode,
+            "secure_temp_dir": "",
+            "security_note": "Hardened mode not enabled because no secure RAM directory was configured.",
+        }
+
+    if system == "Darwin":
+        default_mount_path = "/Volumes/todoctl-ramdisk"
+
+        print()
+        print("macOS hardened mode requires a RAM disk that you create yourself.")
+        print("todoctl will not create or mount it automatically.")
+        print()
+        print("Example:")
+        print("  SECTORS=$((64 * 2048))")
+        print('  DEV="$(hdiutil attach -nomount ram://$SECTORS | awk \'NR==1{print $1}\')"')
+        print('  diskutil erasevolume APFS todoctl-ramdisk "$DEV"')
+        print()
+        print("Your todoctl config file is:")
+        print(f"  {config.config_path}")
+        print()
+
+        mount_path_value = _prompt_text(
+            "Enter the RAM disk mount path to store in config",
+            default=default_mount_path,
+        )
+        mount_path = Path(mount_path_value).expanduser().resolve()
+        config.secure_temp_dir = mount_path
+
+        if _is_writable_directory(mount_path):
+            config.security_mode = "hardened"
+            write_default_config(config)
+            return {
+                "security_mode": config.security_mode,
+                "secure_temp_dir": str(mount_path),
+                "security_note": f"Hardened mode enabled with {mount_path}.",
+            }
+
+        config.security_mode = "standard"
+        write_default_config(config)
+
+        print()
+        print("The configured RAM disk path is not available or not writable yet:")
+        print(f"  {mount_path}")
+        print()
+        print("The path was saved to your config, but todoctl remains in standard mode for now.")
+        print("After creating and mounting the RAM disk at that path, update:")
+        print(f"  {config.config_path}")
+        print()
+        print('Set this value:')
+        print('  security_mode = "hardened"')
+        print()
+
+        return {
+            "security_mode": config.security_mode,
+            "secure_temp_dir": str(mount_path),
+            "security_note": (
+                "macOS RAM disk path was saved, but hardened mode was not enabled "
+                "because the path is not currently writable."
+            ),
+        }
+
+    print()
+    print(f"Automatic hardened mode setup is not supported on platform: {system}")
+    print("todoctl will remain in standard mode.")
+    print()
+
+    config.security_mode = "standard"
+    config.secure_temp_dir = None
+    write_default_config(config)
+    return {
+        "security_mode": config.security_mode,
+        "secure_temp_dir": "",
+        "security_note": f"Hardened mode not enabled on unsupported platform: {system}.",
+    }
+
+
+def configure_security_mode_for_init(config: AppConfig) -> dict[str, str]:
+    """
+    Configure security mode during explicit initialization.
+
+    Args:
+        config (AppConfig): Application configuration.
+
+    Returns:
+        dict[str, str]: Summary of the chosen security settings.
+    """
+    return _configure_security_mode_interactive(config)
+
 
 def detect_shell_name() -> str:
     """
@@ -87,6 +294,7 @@ def detect_shell_name() -> str:
     """
     try:
         import subprocess
+
         parent = subprocess.check_output(
             ["ps", "-p", str(os.getppid()), "-o", "comm="],
             text=True,
@@ -132,6 +340,7 @@ def completion_file(shell_name: str) -> Path:
         return Path.home() / ".zsh" / "completions" / "_todo"
     return Path.home() / ".bash_completions" / "todo.sh"
 
+
 def _replace_or_append_block(path: Path, start_marker: str, end_marker: str, block: str) -> None:
     """
     Replace or append a marked block of text in a file.
@@ -164,6 +373,7 @@ def _replace_or_append_block(path: Path, start_marker: str, end_marker: str, blo
         content += block.rstrip("\n") + "\n"
     path.write_text(content, encoding="utf-8")
 
+
 def _remove_block(path: Path, start_marker: str, end_marker: str) -> None:
     """
     Remove a marked block of text from a file.
@@ -191,6 +401,7 @@ def _remove_block(path: Path, start_marker: str, end_marker: str) -> None:
         new_content += "\n"
     path.write_text(new_content, encoding="utf-8")
 
+
 def shell_integration_block() -> str:
     """
     Generate the shell integration block.
@@ -209,6 +420,7 @@ def shell_integration_block() -> str:
         SHELL_MARKER_END,
     ])
 
+
 def bash_completion_source_block() -> str:
     """
     Generate the bash completion source block.
@@ -223,6 +435,7 @@ def bash_completion_source_block() -> str:
         "fi",
         BASH_COMPLETION_SOURCE_END,
     ])
+
 
 def zsh_completion_source_block() -> str:
     """
@@ -239,6 +452,7 @@ def zsh_completion_source_block() -> str:
         "compinit",
         ZSH_COMPLETION_END,
     ])
+
 
 def bash_completion_content() -> str:
     """
@@ -269,6 +483,7 @@ def bash_completion_content() -> str:
         "",
     ])
 
+
 def zsh_completion_content() -> str:
     """
     Generate the zsh completion script content for todoctl.
@@ -297,6 +512,7 @@ def zsh_completion_content() -> str:
         "",
     ])
 
+
 def vim_paths() -> dict[str, Path]:
     """
     Get the file paths for vim integration components.
@@ -310,6 +526,7 @@ def vim_paths() -> dict[str, Path]:
         "syntax": root / "syntax" / VIM_SYNTAX,
         "ftplugin": root / "ftplugin" / VIM_FTPLUGIN,
     }
+
 
 def _bundled_vim_content(relative_path: str) -> str:
     """
@@ -367,8 +584,8 @@ def install_for_shell(config: AppConfig, update_vim: bool = True) -> dict:
             "ftplugin": _bundled_vim_content("ftplugin/todoctl.vim"),
         }
 
-        for p in paths.values():
-            p.parent.mkdir(parents=True, exist_ok=True)
+        for path in paths.values():
+            path.parent.mkdir(parents=True, exist_ok=True)
 
         for key, path in paths.items():
             if update_vim or not path.exists():
@@ -376,9 +593,15 @@ def install_for_shell(config: AppConfig, update_vim: bool = True) -> dict:
 
         installed_vim = True
 
-    state = {"shell": shell_name, "rc_file": str(rc_file), "completion_file": str(comp_file), "vim_installed": installed_vim}
+    state = {
+        "shell": shell_name,
+        "rc_file": str(rc_file),
+        "completion_file": str(comp_file),
+        "vim_installed": installed_vim,
+    }
     _save_state(config.bootstrap_state_file, state)
     return state
+
 
 def uninstall_integrations(config: AppConfig) -> dict:
     """
@@ -418,6 +641,7 @@ def uninstall_integrations(config: AppConfig) -> dict:
     if config.bootstrap_state_file.exists():
         config.bootstrap_state_file.unlink()
     return removed
+
 
 def auto_bootstrap(config: AppConfig) -> dict:
     """

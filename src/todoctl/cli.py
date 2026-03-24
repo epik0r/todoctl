@@ -6,16 +6,19 @@ error handling, and startup bootstrap behavior. It is the main entry
 point for daily usage of todoctl.
 """
 from __future__ import annotations
+
 import os
 import shutil
 import subprocess
 import sys
 from pathlib import Path
+
 import typer
 from rich.console import Console
 from rich.table import Table
+
 from .backup import create_backup
-from .bootstrap import auto_bootstrap, uninstall_integrations
+from .bootstrap import auto_bootstrap, configure_security_mode_for_init, uninstall_integrations
 from .config import load_config, write_default_config
 from .crypto import get_passphrase
 from .doctor import collect_doctor_report
@@ -36,6 +39,7 @@ from .store import (
 app = typer.Typer(help="Encrypted monthly todo manager", add_completion=False)
 console = Console()
 
+
 def _cfg():
     """
     Load and return the application configuration.
@@ -44,6 +48,7 @@ def _cfg():
         AppConfig: The loaded todoctl application configuration.
     """
     return load_config()
+
 
 def handle_error(exc: Exception) -> None:
     """
@@ -58,6 +63,7 @@ def handle_error(exc: Exception) -> None:
     console.print(f"[red]{exc}[/red]")
     raise typer.Exit(1)
 
+
 def _completion_mode() -> bool:
     """
     Check whether the CLI is running in shell completion mode.
@@ -68,26 +74,40 @@ def _completion_mode() -> bool:
     """
     return any(key.endswith("_COMPLETE") for key in os.environ)
 
+
 @app.command()
 def init() -> None:
     """
     Initialize todoctl storage and default configuration.
 
     This command ensures that all required directories exist, writes the
-    default configuration file, and initializes the encrypted data store.
+    default configuration file, initializes the encrypted data store, and
+    asks once whether hardened editing mode should be configured.
 
     Raises:
-        typer.Exit: If store initialization fails.
+        typer.Exit: If initialization fails.
     """
     cfg = _cfg()
     cfg.ensure_directories()
     write_default_config(cfg)
+
     try:
         init_store(cfg)
+        security_state = configure_security_mode_for_init(cfg)
     except Exception as exc:
         handle_error(exc)
         return
+
     console.print("[green]todoctl initialized.[/green]")
+    console.print(f"[green]Configuration written to {cfg.config_path}[/green]")
+    console.print(f"[green]Security mode: {security_state['security_mode']}[/green]")
+
+    if security_state["secure_temp_dir"]:
+        console.print(f"[green]Secure temp dir: {security_state['secure_temp_dir']}[/green]")
+
+    if security_state["security_note"]:
+        console.print(f"[yellow]{security_state['security_note']}[/yellow]")
+
 
 @app.command("list")
 @app.command("l")
@@ -219,6 +239,7 @@ def edit_cmd(month: str | None = typer.Argument(None)) -> None:
     if changed:
         console.print(f"[green]Saved {resolved_month}.[/green]")
 
+
 @app.command()
 def add(
     title: str | None = typer.Argument(
@@ -274,6 +295,7 @@ def done(task_id: int, month: str | None = typer.Option(None, "--month", "-m")) 
     """
     _set_status_cmd(task_id, Status.DONE, month)
 
+
 @app.command()
 def doing(task_id: int, month: str | None = typer.Option(None, "--month", "-m")) -> None:
     """
@@ -284,6 +306,7 @@ def doing(task_id: int, month: str | None = typer.Option(None, "--month", "-m"))
         month (str | None): Optional month identifier containing the task.
     """
     _set_status_cmd(task_id, Status.DOING, month)
+
 
 @app.command(name="open")
 def open_cmd(task_id: int, month: str | None = typer.Option(None, "--month", "-m")) -> None:
@@ -296,6 +319,7 @@ def open_cmd(task_id: int, month: str | None = typer.Option(None, "--month", "-m
     """
     _set_status_cmd(task_id, Status.OPEN, month)
 
+
 @app.command()
 def side(task_id: int, month: str | None = typer.Option(None, "--month", "-m")) -> None:
     """
@@ -306,6 +330,7 @@ def side(task_id: int, month: str | None = typer.Option(None, "--month", "-m")) 
         month (str | None): Optional month identifier containing the task.
     """
     _set_status_cmd(task_id, Status.SIDE, month)
+
 
 def _set_status_cmd(task_id: int, status: Status, month: str | None) -> None:
     """
@@ -329,6 +354,7 @@ def _set_status_cmd(task_id: int, status: Status, month: str | None) -> None:
         handle_error(exc)
         return
     console.print(f"[green]Task {task_id} set to {status.value} in {resolved_month}.[/green]")
+
 
 @app.command()
 def remove(task_id: int, month: str | None = typer.Option(None, "--month", "-m")) -> None:
@@ -392,6 +418,7 @@ def rollover(source: str, target: str) -> None:
         return
     console.print(f"[green]Rolled over open tasks from {src} to {dst}.[/green]")
 
+
 @app.command()
 def doctor(verify_password: bool = typer.Option(False, "--verify-password")) -> None:
     """
@@ -414,6 +441,7 @@ def doctor(verify_password: bool = typer.Option(False, "--verify-password")) -> 
         table.add_row(name, f"[{style}]{status}[/{style}]", details)
     console.print(table)
 
+
 @app.command()
 def backup(output: Path | None = typer.Option(None, "--output", "-o")) -> None:
     """
@@ -432,6 +460,7 @@ def backup(output: Path | None = typer.Option(None, "--output", "-o")) -> None:
         handle_error(exc)
         return
     console.print(f"[green]Backup written to {target}[/green]")
+
 
 @app.command()
 def purge(
@@ -486,6 +515,7 @@ def purge(
         console.print("[yellow]Restart the shell after uninstall for a clean environment.[/yellow]")
         subprocess.run([sys.executable, "-m", "pip", "uninstall", "-y", "todoctl"], check=False)
 
+
 def main() -> None:
     """
     Run the todoctl command-line application.
@@ -503,6 +533,7 @@ def main() -> None:
             console.print(f"[yellow]todoctl bootstrap warning: {exc}[/yellow]")
             console.print(f"[yellow]See {cfg.bootstrap_log_file} for details.[/yellow]")
     app()
+
 
 if __name__ == "__main__":
     main()
