@@ -21,6 +21,24 @@ from .renderer import render_month, sort_tasks
 MONTH_RE = re.compile(r"^\d{4}-\d{2}$")
 
 
+def _validate_month(month: str) -> str:
+    """
+    Validate a month identifier.
+
+    Args:
+        month (str): Month identifier expected in YYYY-MM format.
+
+    Returns:
+        str: The validated month identifier.
+
+    Raises:
+        ValueError: If the month identifier is invalid.
+    """
+    if not MONTH_RE.fullmatch(month):
+        raise ValueError(f"Invalid month identifier: {month!r}")
+    return month
+
+
 def _atomic_write_bytes(path: Path, data: bytes, mode: int = 0o600) -> None:
     """
     Atomically write bytes to a file.
@@ -82,8 +100,12 @@ def month_path(config: AppConfig, month: str) -> Path:
 
     Returns:
         Path: Path to the encrypted month file.
+
+    Raises:
+        ValueError: If the month identifier is invalid.
     """
-    return config.months_dir / f"{month}.todo.enc"
+    validated_month = _validate_month(month)
+    return config.months_dir / f"{validated_month}.todo.enc"
 
 
 def list_months(config: AppConfig) -> list[str]:
@@ -168,16 +190,20 @@ def load_month(config: AppConfig, month: str) -> MonthDocument:
 
     Returns:
         MonthDocument: Loaded and parsed document.
+
+    Raises:
+        ValueError: If the month identifier is invalid.
     """
-    path = month_path(config, month)
+    validated_month = _validate_month(month)
+    path = month_path(config, validated_month)
     if not path.exists():
-        return MonthDocument(month=month, tasks=[])
+        return MonthDocument(month=validated_month, tasks=[])
     text = decrypt_text(
         path.read_bytes(),
         ttl_hours=config.passphrase_cache_hours,
         index_file=config.session_index_file,
     )
-    doc = parse_month(text, fallback_month=month)
+    doc = parse_month(text, fallback_month=validated_month)
     return sort_tasks(doc)
 
 
@@ -194,7 +220,11 @@ def save_month(config: AppConfig, doc: MonthDocument) -> Path:
 
     Returns:
         Path: Path to the saved file.
+
+    Raises:
+        ValueError: If the document month identifier is invalid.
     """
+    validated_month = _validate_month(doc.month)
     config.ensure_directories()
     sort_tasks(doc)
     ciphertext = encrypt_text(
@@ -202,7 +232,7 @@ def save_month(config: AppConfig, doc: MonthDocument) -> Path:
         ttl_hours=config.passphrase_cache_hours,
         index_file=config.session_index_file,
     )
-    path = month_path(config, doc.month)
+    path = month_path(config, validated_month)
     _atomic_write_bytes(path, ciphertext)
     return path
 
@@ -220,8 +250,12 @@ def add_task(config: AppConfig, month: str, title: str) -> MonthDocument:
 
     Returns:
         MonthDocument: Updated document.
+
+    Raises:
+        ValueError: If the month identifier is invalid.
     """
-    doc = load_month(config, month)
+    validated_month = _validate_month(month)
+    doc = load_month(config, validated_month)
     doc.tasks.append(Task(id=doc.next_id(), title=title, status=Status.OPEN))
     save_month(config, doc)
     return doc
@@ -243,15 +277,16 @@ def set_status(config: AppConfig, month: str, task_id: int, status: Status) -> M
         MonthDocument: Updated document.
 
     Raises:
-        ValueError: If the task ID is not found.
+        ValueError: If the month identifier is invalid or the task ID is not found.
     """
-    doc = load_month(config, month)
+    validated_month = _validate_month(month)
+    doc = load_month(config, validated_month)
     for task in doc.tasks:
         if task.id == task_id:
             task.status = status
             save_month(config, doc)
             return doc
-    raise ValueError(f"Task ID {task_id} not found in {month}")
+    raise ValueError(f"Task ID {task_id} not found in {validated_month}")
 
 
 def remove_task(config: AppConfig, month: str, task_id: int) -> MonthDocument:
@@ -269,12 +304,13 @@ def remove_task(config: AppConfig, month: str, task_id: int) -> MonthDocument:
         MonthDocument: Updated document.
 
     Raises:
-        ValueError: If the task ID is not found.
+        ValueError: If the month identifier is invalid or the task ID is not found.
     """
-    doc = load_month(config, month)
+    validated_month = _validate_month(month)
+    doc = load_month(config, validated_month)
     before = len(doc.tasks)
     doc.tasks = [task for task in doc.tasks if task.id != task_id]
     if len(doc.tasks) == before:
-        raise ValueError(f"Task ID {task_id} not found in {month}")
+        raise ValueError(f"Task ID {task_id} not found in {validated_month}")
     save_month(config, doc)
     return doc
