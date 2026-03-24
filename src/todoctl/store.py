@@ -7,7 +7,9 @@ and removing tasks from monthly documents.
 """
 from __future__ import annotations
 
+import os
 import re
+import tempfile
 from pathlib import Path
 
 from .config import AppConfig
@@ -17,6 +19,57 @@ from .parser import parse_month
 from .renderer import render_month, sort_tasks
 
 MONTH_RE = re.compile(r"^\d{4}-\d{2}$")
+
+
+def _atomic_write_bytes(path: Path, data: bytes, mode: int = 0o600) -> None:
+    """
+    Atomically write bytes to a file.
+
+    Data is written to a temporary file in the same directory, flushed to disk,
+    and then atomically moved into place with os.replace(). This reduces the
+    risk of partial file corruption if the process is interrupted during write.
+
+    Args:
+        path (Path): Final destination path.
+        data (bytes): File content to write.
+        mode (int): File mode to apply to the temporary file.
+
+    Raises:
+        OSError: If writing or replacement fails.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    fd, tmp_name = tempfile.mkstemp(
+        prefix=f".{path.name}.",
+        suffix=".tmp",
+        dir=str(path.parent),
+    )
+    tmp_path = Path(tmp_name)
+
+    try:
+        os.chmod(tmp_path, mode)
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(data)
+            handle.flush()
+            os.fsync(handle.fileno())
+
+        os.replace(tmp_path, path)
+
+        try:
+            dir_fd = os.open(path.parent, os.O_RDONLY)
+            try:
+                os.fsync(dir_fd)
+            finally:
+                os.close(dir_fd)
+        except OSError:
+            pass
+
+    except Exception:
+        try:
+            tmp_path.unlink()
+        except OSError:
+            pass
+        raise
 
 
 def month_path(config: AppConfig, month: str) -> Path:
@@ -76,13 +129,12 @@ def init_store(config: AppConfig) -> None:
     """
     config.ensure_directories()
     if not config.check_file.exists():
-        config.check_file.write_bytes(
-            create_check_blob(
-                confirm_password=True,
-                ttl_hours=config.passphrase_cache_hours,
-                index_file=config.session_index_file,
-            )
+        check_blob = create_check_blob(
+            confirm_password=True,
+            ttl_hours=config.passphrase_cache_hours,
+            index_file=config.session_index_file,
         )
+        _atomic_write_bytes(config.check_file, check_blob)
 
 
 def verify_store_password(config: AppConfig) -> bool:
@@ -134,7 +186,7 @@ def save_month(config: AppConfig, doc: MonthDocument) -> Path:
     Encrypt and save a month document.
 
     Ensures directories exist, sorts tasks, and writes the encrypted
-    representation to disk.
+    representation to disk atomically.
 
     Args:
         config (AppConfig): Application configuration.
@@ -151,7 +203,7 @@ def save_month(config: AppConfig, doc: MonthDocument) -> Path:
         index_file=config.session_index_file,
     )
     path = month_path(config, doc.month)
-    path.write_bytes(ciphertext)
+    _atomic_write_bytes(path, ciphertext)
     return path
 
 
