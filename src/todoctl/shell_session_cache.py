@@ -7,7 +7,9 @@ context for a limited time. It also tracks cache entries and exposes
 basic session state information.
 """
 from __future__ import annotations
-import json, os
+import json
+import os
+import secrets
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import keyring
@@ -15,20 +17,33 @@ import keyring
 SERVICE_NAME = "todoctl-shell-session"
 ENV_NAME = "TODOCTL_SESSION_ID"
 
+# In-memory fallback cache to keep session stable within one process
+_FALLBACK_SESSION_ID: str | None = None
+
+
 def session_id() -> str:
     """
     Retrieve the current shell session identifier.
 
-    Uses an environment variable if available, otherwise falls back
-    to a derived identifier based on the parent process ID.
+    Uses an environment variable if available. If not set, generates
+    a cryptographically secure random fallback identifier for the
+    lifetime of the current process.
 
     Returns:
         str: The current session identifier.
     """
+    global _FALLBACK_SESSION_ID
+
     value = os.environ.get(ENV_NAME, "").strip()
     if value:
         return value
-    return f"fallback-{os.getppid()}"
+
+    if _FALLBACK_SESSION_ID is None:
+        # Generate unpredictable session identifier
+        _FALLBACK_SESSION_ID = f"fallback-{secrets.token_hex(16)}"
+
+    return _FALLBACK_SESSION_ID
+
 
 def _load_index(index_file: Path) -> list[str]:
     """
