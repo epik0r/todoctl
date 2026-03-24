@@ -7,6 +7,50 @@ Semantic Versioning.
 
 ------------------------------------------------------------------------
 
+## [Unreleased]
+
+### Added
+
+-   Added a shell reload hint after `todo init` to explain how to activate
+    session integration in the current shell
+-   Added macOS command `todo ramdisk-create` to create the RAM disk used for
+    hardened editing mode
+
+### Changed
+
+-   Introduced a hardened editing mode with RAM-backed temporary files for
+    editor sessions
+-   Added `security_mode` and `secure_temp_dir` configuration options
+-   Increased the default scrypt work factor for newly encrypted data and
+    introduced a versioned v2 encrypted blob format while keeping legacy v1
+    blobs readable
+
+### Security
+
+-   Removed plaintext passphrase support via `TODOCTL_PASSPHRASE` and sanitize
+    the editor subprocess environment to avoid leaking secrets to child
+    processes
+-   Replaced the predictable PPID-based shell session fallback with a random
+    in-memory session identifier
+-   Sanitized backup tar metadata to prevent leaking UID, GID, username, group
+    name and original timestamps
+-   Generated the backup manifest fully in memory to avoid temporary manifest
+    file races during concurrent backups
+-   Switched encrypted month and check file writes to atomic file replacement
+    to reduce the risk of corrupted files on interrupted writes
+-   Validated month identifiers in storage path handling instead of relying only
+    on CLI-level validation
+-   Improved editor hardening for vi/vim by disabling backup, swap and viminfo
+    persistence and by using RAM-backed temporary files in hardened mode
+-   Enabled hardened mode automatically after successful `todo ramdisk-create`
+    on macOS
+
+### Fixed
+
+-   Reported self-uninstall failures explicitly and added guidance for
+    `pipx uninstall todoctl`
+-   Fixed secure editor command construction for vi/vim compatibility
+
 ## \[1.0.8\] - 2026-03-24
 
 ### Added
