@@ -76,6 +76,23 @@ def _completion_mode() -> bool:
     return any(key.endswith("_COMPLETE") for key in os.environ)
 
 
+def _is_probably_pipx_install() -> bool:
+    """
+    Heuristically detect whether todoctl is running from a pipx-managed environment.
+
+    Returns:
+        bool: True if the current interpreter or prefix looks like a pipx venv.
+    """
+    candidates = {
+        str(Path(sys.executable).resolve()).lower(),
+        str(Path(sys.prefix).resolve()).lower(),
+        str(Path(os.environ.get("VIRTUAL_ENV", "")).resolve()).lower()
+        if os.environ.get("VIRTUAL_ENV")
+        else "",
+    }
+    return any("pipx" in value and "venv" in value for value in candidates if value)
+
+
 def _create_macos_ramdisk(config_path: Path, mount_path: Path) -> None:
     """
     Create and mount the default todoctl RAM disk on macOS.
@@ -151,6 +168,55 @@ def _create_macos_ramdisk(config_path: Path, mount_path: Path) -> None:
         "[yellow]If you want it to be recreated automatically when a shell starts, "
         "add 'todo ramdisk-create' to your ~/.bashrc, ~/.bash_profile, or ~/.zshrc.[/yellow]"
     )
+
+
+def _self_uninstall_package() -> None:
+    """
+    Attempt to uninstall todoctl from the current Python environment.
+
+    This function reports failures explicitly and provides pipx-specific
+    guidance when the current installation appears to be managed by pipx.
+
+    Raises:
+        RuntimeError: If the uninstall command fails.
+    """
+    command = [sys.executable, "-m", "pip", "uninstall", "-y", "todoctl"]
+    result = subprocess.run(
+        command,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    stdout = (result.stdout or "").strip()
+    stderr = (result.stderr or "").strip()
+    pipx_install = _is_probably_pipx_install()
+
+    if result.returncode != 0:
+        message_parts = [
+            "Automatic package uninstall failed.",
+            f"Command: {' '.join(command)}",
+        ]
+        if stdout:
+            message_parts.append(f"stdout: {stdout}")
+        if stderr:
+            message_parts.append(f"stderr: {stderr}")
+        if pipx_install:
+            message_parts.append(
+                "This installation appears to be managed by pipx. "
+                "Run 'pipx uninstall todoctl' to fully remove it."
+            )
+        raise RuntimeError("\n".join(message_parts))
+
+    if stdout:
+        console.print(f"[green]{stdout}[/green]")
+
+    if pipx_install:
+        console.print(
+            "[yellow]This installation appears to be managed by pipx. "
+            "To fully remove the pipx shim and environment, also run:[/yellow]"
+        )
+        console.print("[yellow]  pipx uninstall todoctl[/yellow]")
 
 
 @app.command()
