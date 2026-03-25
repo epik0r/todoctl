@@ -10,8 +10,9 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from pathlib import Path
-
 import tomllib
+from todoctl.fs_secure import write_private_text
+
 
 DEFAULT_CONFIG_DIR = Path.home() / ".config" / "todoctl"
 DEFAULT_DATA_DIR = Path.home() / ".local" / "share" / "todoctl"
@@ -220,5 +221,5 @@ def write_default_config(config: AppConfig) -> Path:
         f'security_mode = "{_toml_escape(config.security_mode)}"\n'
         f'secure_temp_dir = "{_toml_escape(secure_temp_dir)}"\n'
     )
-    config.config_path.write_text(content, encoding="utf-8")
+    write_private_text(config.config_path, content, encoding="utf-8")
     return config.config_path

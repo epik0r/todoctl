@@ -13,6 +13,7 @@ import secrets
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import keyring
+from todoctl.fs_secure import write_private_text
 
 SERVICE_NAME = "todoctl-shell-session"
 ENV_NAME = "TODOCTL_SESSION_ID"
@@ -78,8 +79,11 @@ def _save_index(index_file: Path, keys: list[str]) -> None:
         index_file (Path): Path to the session index file.
         keys (list[str]): List of session identifiers.
     """
-    index_file.parent.mkdir(parents=True, exist_ok=True)
-    index_file.write_text(json.dumps(sorted(set(keys)), indent=2), encoding="utf-8")
+    write_private_text(
+        index_file,
+        json.dumps(sorted(set(keys)), indent=2),
+        encoding="utf-8",
+    )
 
 def store_passphrase(passphrase: str, ttl_hours: int, index_file: Path) -> str:
     """

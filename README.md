@@ -23,7 +23,7 @@ It is **not** a replacement for a team collaboration tool. It is a personal prod
 
 ## Features
 
-- 🔐 Password-based encryption (scrypt + ChaCha20-Poly1305)
+- 🔐 Password-based encryption (scrypt + ChaCha20-Poly1305, versioned blob format)
 - 📅 Monthly task separation
 - 🧠 Status-driven workflow (OPEN, DOING, SIDE, DONE)
 - 🧾 Stable task IDs
@@ -31,19 +31,48 @@ It is **not** a replacement for a team collaboration tool. It is a personal prod
 - ✍️ Native `vim` / `$EDITOR` editing
 - 🧩 Shell integration (auto-installed)
 - ⚡ Shell completion (auto-installed)
-- 🔄 Session-based password caching
-- 💾 Backup support
+- 🔄 Session-based password caching (per shell, secure fallback IDs)
+- 💾 Backup support (sanitized metadata, in-memory manifest)
 - 🧼 Clean uninstall (`todo purge --uninstall`)
+- 🛡 Hardened editing mode (RAM-backed temp files)
+- 🍎 macOS RAM disk helper (`todo ramdisk-create`)
 
 ---
 
+## Security Highlights
+
+- Modern authenticated encryption (ChaCha20-Poly1305)
+- Memory-hard key derivation (scrypt, versioned parameters)
+- No plaintext passphrase via environment variables
+- Sanitized subprocess environments (editor isolation)
+- Atomic file writes to prevent corruption
+- Strict path validation for storage operations
+- Secure session handling with random identifiers
+- Hardened editor mode with reduced persistence
+
+### ⚠️ Important Recommendation
+
+For maximum security, it is **strongly recommended** to enable hardened editing mode using a RAM-backed temporary directory.
+
+On macOS:
+
+```bash
+todo ramdisk-create
+```
+
+On Linux, `/dev/shm` is typically suitable.
+
+This ensures that decrypted todo content:
+
+- never touches disk
+- is not recoverable after editing
+- avoids editor swap/backup leakage
+
+---
 
 ## Installation (macOS & Linux – user-wide)
 
 The recommended way to install `todoctl` is via pipx.
-This works on both macOS and Linux and installs the tool user-wide.
-
----
 
 ### 1. Install pipx
 
@@ -72,13 +101,11 @@ exec $SHELL
 
 ### 2. Install todoctl
 
-From PyPI (recommended):
-
 ```bash
 pipx install todoctl
 ```
 
-Or directly from GitHub:
+or:
 
 ```bash
 pipx install git+https://github.com/epik0r/todoctl.git
@@ -86,47 +113,23 @@ pipx install git+https://github.com/epik0r/todoctl.git
 
 ---
 
-### 3. Verify installation
-
-todo --help
-
----
-
-### Notes
-
-- The `todo` command is installed into:
-
-  ~/.local/bin
-
-- If the command is not found:
-
-  pipx ensurepath
-  exec $SHELL
-
-- pipx uses isolated environments internally, but for you the tool behaves like a normal global CLI.
----
-
-### Installation dev
+### 3. Verify
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -e .
+todo --help
 ```
+
+---
 
 ## First Run Behavior
 
-On the first real `todo` command (e.g. `todo init`), the tool automatically installs:
+On first `todo init`, the tool installs:
 
 - shell session integration
-- shell completion (bash or zsh)
-- vim integration (if `vim` or `vi` is available)
+- shell completion
+- vim integration
 
-⚠️ Important:
-Shell completion will only be active after:
-
-- opening a new terminal, or
-- reloading your shell config:
+Then reload your shell:
 
 ```bash
 source ~/.bashrc
@@ -138,136 +141,28 @@ source ~/.zshrc
 
 ## Usage
 
-### Initialize
-
 ```bash
 todo init
-```
-
-### List tasks
-
-```bash
 todo list
-todo list 03
-todo list 2026-03
-```
-
-### Edit tasks (recommended workflow)
-
-```bash
 todo edit
-```
-
-### Add a task
-
-```bash
-todo add "Implement API integration"
-```
-
-### Change status
-
-```bash
+todo add "Task"
 todo doing 1
 todo done 1
-todo open 1
-todo side 1
-```
-
-### Remove a task
-
-```bash
 todo remove 3
-```
-
-### Rollover tasks
-
-```bash
 todo rollover 03 04
-```
-
-### Backup
-
-```bash
 todo backup
-```
-
-### Doctor
-
-```bash
 todo doctor
-```
-
-### Purge
-
-```bash
 todo purge --yes
-todo purge --yes --uninstall
 ```
-
-## todoctl – Vim Integration
-
-### Filetype Detection
-- Automatically detects `.todo` files
-- Sets `filetype=todoctl`
-
-### Syntax Highlighting
-- Highlights:
-  - Header
-  - Task IDs
-  - Comments
-- Status colors:
-  - OPEN (green)
-  - DOING (yellow)
-  - SIDE (blue)
-  - DONE (gray)
-
-### Status Visualization (Conceal)
-- Displays symbols instead of text:
-  - OPEN → ○
-  - DOING → ▶
-  - SIDE → ◆
-  - DONE → ✔
-
-### Status Editing
-- Press `t` to cycle status:
-  OPEN → DOING → SIDE → DONE → OPEN
-
-### Folding by Status
-- Tasks grouped automatically by status
-
-#### Controls
-- `z` → toggle current block
-- `gZ` → close all
-- `O` → open all
-
-## Editor Settings
-- `nowrap`
-- `nospell`
-- `commentstring=# %s`
 
 ---
 
 ## Security Model
 
-- scrypt + ChaCha20-Poly1305
-- no plaintext storage
-- session-scoped cache
-
----
-
-## Session Cache
-
-- valid per shell
-- expires after TTL (default 8h)
-- no cross-terminal sharing
-
----
-
-## Troubleshooting
-
-```bash
-cat ~/.local/share/todoctl/bootstrap.log
-```
+- encrypted at rest
+- no plaintext persistence (with hardened mode)
+- session-scoped secrets
+- configurable security level
 
 ---
 

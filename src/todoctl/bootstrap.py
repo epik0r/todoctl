@@ -16,6 +16,7 @@ import traceback
 from importlib.resources import files
 from pathlib import Path
 
+from todoctl.fs_secure import write_private_text, write_user_text
 from .config import AppConfig, write_default_config
 
 SHELL_MARKER_START = "# >>> todoctl shell integration >>>"
@@ -76,8 +77,11 @@ def _save_state(path: Path, state: dict) -> None:
         path (Path): Path to the state file.
         state (dict): State data to persist.
     """
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(state, indent=2, sort_keys=True), encoding="utf-8")
+    write_private_text(
+        path,
+        json.dumps(state, indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
 
 
 def _is_writable_directory(path: Path) -> bool:
@@ -358,7 +362,6 @@ def _replace_or_append_block(path: Path, start_marker: str, end_marker: str, blo
         end_marker (str): Marker indicating the end of the block.
         block (str): The content block to insert.
     """
-    path.parent.mkdir(parents=True, exist_ok=True)
     existing = path.read_text(encoding="utf-8") if path.exists() else ""
     if start_marker in existing and end_marker in existing:
         before = existing.split(start_marker)[0].rstrip("\n")
@@ -375,7 +378,7 @@ def _replace_or_append_block(path: Path, start_marker: str, end_marker: str, blo
         if content:
             content += "\n\n"
         content += block.rstrip("\n") + "\n"
-    path.write_text(content, encoding="utf-8")
+    write_user_text(path, content, encoding="utf-8")
 
 
 def _remove_block(path: Path, start_marker: str, end_marker: str) -> None:
@@ -403,7 +406,7 @@ def _remove_block(path: Path, start_marker: str, end_marker: str) -> None:
         new_content = after
     if new_content:
         new_content += "\n"
-    path.write_text(new_content, encoding="utf-8")
+    write_user_text(path, new_content, encoding="utf-8")
 
 
 def shell_integration_block() -> str:
@@ -571,12 +574,10 @@ def install_for_shell(config: AppConfig, update_vim: bool = True) -> dict:
 
     if shell_name == "zsh":
         _replace_or_append_block(rc_file, ZSH_COMPLETION_MARKER, ZSH_COMPLETION_END, zsh_completion_source_block())
-        comp_file.parent.mkdir(parents=True, exist_ok=True)
-        comp_file.write_text(zsh_completion_content(), encoding="utf-8")
+        write_user_text(comp_file, zsh_completion_content(), encoding="utf-8")
     else:
         _replace_or_append_block(rc_file, BASH_COMPLETION_SOURCE_MARKER, BASH_COMPLETION_SOURCE_END, bash_completion_source_block())
-        comp_file.parent.mkdir(parents=True, exist_ok=True)
-        comp_file.write_text(bash_completion_content(), encoding="utf-8")
+        write_user_text(comp_file, bash_completion_content(), encoding="utf-8")
 
     vim_installed = shutil.which("vim") is not None or shutil.which("vi") is not None
     installed_vim = False
@@ -588,12 +589,9 @@ def install_for_shell(config: AppConfig, update_vim: bool = True) -> dict:
             "ftplugin": _bundled_vim_content("ftplugin/todoctl.vim"),
         }
 
-        for path in paths.values():
-            path.parent.mkdir(parents=True, exist_ok=True)
-
         for key, path in paths.items():
             if update_vim or not path.exists():
-                path.write_text(bundled[key], encoding="utf-8")
+                write_user_text(path, bundled[key], encoding="utf-8")
 
         installed_vim = True
 
